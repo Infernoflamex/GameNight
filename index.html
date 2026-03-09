@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🎲 Game Night</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0d0d1a;--bg2:#131326;--bg3:#1a1a35;
+  --yellow:#f7c948;--pink:#ff5f87;--cyan:#3dffd0;--purple:#b57aff;
+  --blue:#5b8fff;--orange:#ff9f43;--green:#3dff9a;--red:#ff4757;
+  --white:#f0e6ff;--muted:#6b6b9a;--border:#2a2a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0;image-rendering:pixelated}
+body{background:var(--bg);color:var(--white);font-family:'Press Start 2P',monospace;min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg2)}::-webkit-scrollbar-thumb{background:var(--purple);border:2px solid var(--bg)}
+
+/* PIXEL BOXES */
+.px{border:3px solid var(--border);box-shadow:4px 4px 0 #000;background:var(--bg2)}
+.px-y{border:3px solid var(--yellow);box-shadow:4px 4px 0 var(--yellow)}
+.px-p{border:3px solid var(--pink);box-shadow:4px 4px 0 var(--pink)}
+.px-c{border:3px solid var(--cyan);box-shadow:4px 4px 0 var(--cyan)}
+.px-v{border:3px solid var(--purple);box-shadow:4px 4px 0 var(--purple)}
+.px-b{border:3px solid var(--blue);box-shadow:4px 4px 0 var(--blue)}
+.px-g{border:3px solid var(--green);box-shadow:4px 4px 0 var(--green)}
+.px-o{border:3px solid var(--orange);box-shadow:4px 4px 0 var(--orange)}
+
+/* HEADER */
+#hdr{background:var(--bg2);border-bottom:3px solid var(--border);padding:12px 20px 0;position:sticky;top:0;z-index:50}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+.logo-wrap{display:flex;align-items:center;gap:12px}
+.logo-icon{font-size:26px;animation:bob 1.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-4px) rotate(-8deg)}}
+.logo-txt{font-size:13px;color:var(--yellow);text-shadow:2px 2px 0 #b07000,4px 4px 0 #000;line-height:1.5}
+.logo-sub{display:block;font-size:7px;color:var(--cyan);text-shadow:1px 1px 0 #000;margin-top:3px;letter-spacing:2px}
+.hbtn{font-family:'Press Start 2P',monospace;font-size:8px;background:var(--yellow);color:#000;border:3px solid #000;box-shadow:3px 3px 0 #000;padding:8px 14px;cursor:pointer;transition:.1s;white-space:nowrap}
+.hbtn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 #000}
+.hbtn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #000}
+.hbtn.hp{background:var(--pink);color:#fff}
+.tabs{display:flex;overflow-x:auto;gap:0}
+.tab{font-family:'Press Start 2P',monospace;font-size:8px;color:var(--muted);padding:10px 14px;border:none;background:none;cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:.1s}
+.tab.on{color:var(--yellow);border-bottom-color:var(--yellow)}
+.tab:hover:not(.on){color:var(--white)}
+
+/* CONTENT */
+#cnt{padding:20px;max-width:940px;margin:0 auto}
+.page{display:none}.page.on{display:block}
+.stitle{font-size:9px;color:var(--cyan);letter-spacing:2px;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid var(--border);text-shadow:1px 1px 0 #000}
+
+/* CARD */
+.card{background:var(--bg2);border:3px solid var(--border);box-shadow:4px 4px 0 #000;padding:16px;margin-bottom:14px;transition:.1s}
+.card:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 #000}
+.srow{display:flex;gap:18px;margin-top:12px;padding-top:12px;border-top:2px solid var(--border);flex-wrap:wrap}
+.sv{font-size:16px;color:var(--yellow);text-shadow:2px 2px 0 #b07000;font-family:'Press Start 2P',monospace}
+.sl{font-size:7px;color:var(--muted);margin-top:3px;letter-spacing:1px}
+.dot{width:10px;height:10px;display:inline-block;margin-right:6px;flex-shrink:0;vertical-align:middle;border:1px solid rgba(255,255,255,.3)}
+
+/* BAR */
+.barw{display:flex;align-items:center;gap:10px;margin-top:10px}
+.barbg{flex:1;height:12px;background:var(--bg3);border:2px solid var(--border);overflow:hidden}
+.barfill{height:100%;transition:width .5s}
+.barfill::after{content:'';display:block;height:3px;background:rgba(255,255,255,.25);margin-top:2px}
+
+/* GAME GRID */
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.gcard{background:var(--bg2);border:3px solid var(--border);box-shadow:4px 4px 0 #000;cursor:pointer;transition:.1s;overflow:hidden}
+.gcard:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000}
+.gcimg{width:100%;height:110px;object-fit:cover;border-bottom:3px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:42px;overflow:hidden}
+.gcimg img{width:100%;height:100%;object-fit:cover}
+.gcbody{padding:12px}
+
+/* FEED */
+.fitem{background:var(--bg2);border:3px solid var(--border);box-shadow:3px 3px 0 #000;padding:12px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px}
+.fthumb{width:54px;height:54px;border:2px solid var(--border);flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden}
+.fthumb img{width:100%;height:100%;object-fit:cover}
+
+/* PHOTOS */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-top:8px}
+.pt{width:100%;aspect-ratio:1;object-fit:cover;border:2px solid var(--border);cursor:pointer;transition:.1s}
+.pt:hover{border-color:var(--yellow);transform:scale(1.05)}
+
+/* AVATAR */
+.av{border:3px solid var(--border);object-fit:cover;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover}
+
+/* HOME */
+.hero{padding:22px;border:3px solid var(--yellow);box-shadow:6px 6px 0 var(--yellow);background:var(--bg2);margin-bottom:20px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.08) 3px,rgba(0,0,0,.08) 4px);pointer-events:none}
+.htitle{font-size:18px;color:var(--yellow);text-shadow:3px 3px 0 #b07000,5px 5px 0 #000;line-height:1.7;margin-bottom:8px;position:relative}
+.hsub{font-size:7px;color:var(--cyan);letter-spacing:3px;text-shadow:1px 1px 0 #000;position:relative}
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+@media(max-width:560px){.hgrid{grid-template-columns:1fr}}
+.hpanel{background:var(--bg2);padding:14px}
+.hptitle{font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+
+/* WHEEL */
+.wwrap{display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:16px}
+#wcanv{cursor:pointer}
+.wres{font-size:9px;color:var(--yellow);text-align:center;min-height:20px;text-shadow:2px 2px 0 #000}
+.wspin{font-family:'Press Start 2P',monospace;font-size:9px;background:var(--pink);color:#fff;border:3px solid #000;box-shadow:4px 4px 0 #000;padding:10px 20px;cursor:pointer;transition:.1s}
+.wspin:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 #000}
+
+/* MODALS */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.86);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal{background:var(--bg2);border:3px solid var(--purple);box-shadow:6px 6px 0 var(--purple);padding:24px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto}
+.mtitle{font-size:12px;color:var(--yellow);text-shadow:2px 2px 0 #b07000;margin-bottom:20px;letter-spacing:1px}
+.fg{margin-bottom:14px}
+.lbl{display:block;font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:6px}
+input[type=text],input[type=date],select{width:100%;background:var(--bg3);border:3px solid var(--border);color:var(--white);padding:9px 12px;font-family:'Press Start 2P',monospace;font-size:8px;outline:none;transition:.1s}
+input:focus,select:focus{border-color:var(--yellow)}
+select option{background:var(--bg2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:6px 12px;border:2px solid var(--border);background:var(--bg3);color:var(--muted);font-family:'Press Start 2P',monospace;font-size:8px;cursor:pointer;transition:.1s}
+.chip.sel{border-color:var(--yellow);color:var(--yellow);background:var(--bg)}
+.chip.win{background:var(--yellow);color:#000;border-color:var(--yellow)}
+.brow{display:flex;gap:10px;margin-top:14px}
+.bp{background:var(--yellow);color:#000;border:3px solid #000;box-shadow:3px 3px 0 #000;padding:10px 0;font-family:'Press Start 2P',monospace;font-size:8px;cursor:pointer;flex:1;transition:.1s}
+.bp:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 #000}
+.bg{background:transparent;color:var(--muted);border:3px solid var(--border);box-shadow:3px 3px 0 #000;padding:10px 0;font-family:'Press Start 2P',monospace;font-size:8px;cursor:pointer;flex:1;transition:.1s}
+.bg:hover{color:var(--white);border-color:var(--white)}
+.dbtn{background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;opacity:.4;padding:4px;transition:.2s;font-family:monospace}
+.dbtn:hover{opacity:1}
+.ebtn{background:none;border:none;color:var(--blue);cursor:pointer;font-size:13px;opacity:.5;padding:4px;transition:.2s;font-family:monospace}
+.ebtn:hover{opacity:1}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:8px;line-height:2.2;border:2px dashed var(--border)}
+
+/* UPLOAD */
+.uarea{border:2px dashed var(--purple);padding:16px;text-align:center;cursor:pointer;transition:.1s;background:var(--bg3);position:relative;overflow:hidden}
+.uarea:hover{border-color:var(--yellow)}
+.uarea input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.utxt{font-size:8px;color:var(--muted);pointer-events:none;line-height:2}
+.prev{width:80px;height:80px;object-fit:cover;border:3px solid var(--border);margin-top:8px}
+.prevw{width:100%;height:110px;object-fit:cover;border:3px solid var(--border);margin-top:8px}
+.mprev{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.mprev img{width:70px;height:70px;object-fit:cover;border:2px solid var(--border)}
+.rim{position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-size:8px;cursor:pointer;padding:1px 5px;border:none;font-family:monospace}
+
+/* LIGHTBOX */
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;align-items:center;justify-content:center;z-index:400;cursor:pointer}
+#lb img{max-width:90vw;max-height:90vh;border:3px solid var(--yellow);box-shadow:8px 8px 0 var(--yellow)}
+
+/* ACCENT BORDERS cycling */
+.ac0{border-color:var(--yellow)!important;box-shadow:4px 4px 0 var(--yellow)!important}
+.ac1{border-color:var(--pink)!important;box-shadow:4px 4px 0 var(--pink)!important}
+.ac2{border-color:var(--cyan)!important;box-shadow:4px 4px 0 var(--cyan)!important}
+.ac3{border-color:var(--purple)!important;box-shadow:4px 4px 0 var(--purple)!important}
+.ac4{border-color:var(--blue)!important;box-shadow:4px 4px 0 var(--blue)!important}
+.ac5{border-color:var(--orange)!important;box-shadow:4px 4px 0 var(--orange)!important}
+.ac6{border-color:var(--green)!important;box-shadow:4px 4px 0 var(--green)!important}
+
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fi .25s ease}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div class="hdr-top">
+    <div class="logo-wrap">
+      <div class="logo-icon">🎲</div>
+      <div class="logo-txt">GAME NIGHT<span class="logo-sub">PIXEL EDITION</span></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div id="syncbadge" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:2px solid var(--border);font-size:7px;letter-spacing:1px;color:var(--muted)">
+        <div id="syncdot" style="width:8px;height:8px;border-radius:50%;background:var(--yellow);animation:blink .7s infinite;flex-shrink:0"></div>
+        <span id="synctxt">CONNEXION...</span>
+      </div>
+      <button class="hbtn hp" onclick="openMatchModal()">+ PARTIE</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab on"  onclick="sw('accueil',this)">🏠 ACCUEIL</button>
+    <button class="tab"     onclick="sw('classement',this)">🏆 TOP</button>
+    <button class="tab"     onclick="sw('jeux',this)">🎮 JEUX</button>
+    <button class="tab"     onclick="sw('historique',this)">📜 HISTO</button>
+    <button class="tab"     onclick="sw('joueurs',this)">👾 JOUEURS</button>
+  </div>
+</div>
+
+<div id="cnt">
+  <div id="pg-accueil"    class="page on"></div>
+  <div id="pg-classement" class="page"></div>
+  <div id="pg-jeux"       class="page"></div>
+  <div id="pg-historique" class="page"></div>
+  <div id="pg-joueurs"    class="page"></div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lb" onclick="document.getElementById('lb').style.display='none'"><img id="lbimg" src="" alt=""/></div>
+
+<!-- MATCH MODAL -->
+<div id="mModal" class="ov" style="display:none" onclick="if(event.target===this)cm('mModal')">
+ <div class="modal fi">
+  <div class="mtitle">⚔️ NOUVELLE PARTIE</div>
+  <div id="ms1">
+    <div class="fg"><label class="lbl">JEU</label><select id="m-game"></select></div>
+    <div class="fg"><label class="lbl">DATE</label><input type="date" id="m-date"/></div>
+    <div class="fg"><label class="lbl">JOUEURS</label><div id="m-players" class="chips"></div></div>
+    <div class="brow"><button class="bg" onclick="cm('mModal')">ANNULER</button><button class="bp" onclick="mNext()">SUIVANT →</button></div>
+  </div>
+  <div id="ms2" style="display:none">
+    <div class="fg"><label class="lbl">🏆 GAGNANT</label><div id="m-winners" class="chips"></div></div>
+    <div class="fg">
+      <label class="lbl">📸 PHOTOS DE LA PARTIE</label>
+      <div class="uarea" onclick="document.getElementById('mph').click()">
+        <div class="utxt">CLIQUER POUR AJOUTER DES PHOTOS<br><span style="color:var(--purple)">PLUSIEURS AUTORISÉES</span></div>
+        <input type="file" id="mph" accept="image/*" multiple style="display:none"/>
+      </div>
+      <div id="mph-prev" class="mprev"></div>
+    </div>
+    <div class="brow">
+      <button class="bg" onclick="document.getElementById('ms1').style.display='block';document.getElementById('ms2').style.display='none'">← RETOUR</button>
+      <button class="bp" onclick="submitMatch()">ENREGISTRER ✓</button>
+    </div>
+  </div>
+ </div>
+</div>
+
+<!-- EDIT MATCH MODAL -->
+<div id="emModal" class="ov" style="display:none" onclick="if(event.target===this)cm('emModal')">
+ <div class="modal fi">
+  <div class="mtitle">✏️ MODIFIER PARTIE</div>
+  <div class="fg"><label class="lbl">DATE</label><input type="date" id="e-date"/></div>
+  <div class="fg"><label class="lbl">🏆 CHANGER GAGNANT</label><div id="e-winners" class="chips"></div></div>
+  <div class="fg">
+    <label class="lbl">📸 PHOTOS</label>
+    <div class="uarea" onclick="document.getElementById('eph').click()">
+      <div class="utxt">AJOUTER DES PHOTOS</div>
+      <input type="file" id="eph" accept="image/*" multiple style="display:none"/>
+    </div>
+    <div id="eph-prev" class="mprev"></div>
+  </div>
+  <div class="brow"><button class="bg" onclick="cm('emModal')">ANNULER</button><button class="bp" onclick="submitEM()">ENREGISTRER ✓</button></div>
+ </div>
+</div>
+
+<!-- PLAYER MODAL -->
+<div id="pModal" class="ov" style="display:none" onclick="if(event.target===this)cm('pModal')">
+ <div class="modal fi">
+  <div class="mtitle" id="pModalTitle">👾 AJOUTER JOUEUR</div>
+  <div class="fg"><label class="lbl">NOM</label><input type="text" id="p-name" placeholder="EX: ALEX" onkeydown="if(event.key==='Enter')submitPlayer()"/></div>
+  <div class="fg">
+    <label class="lbl">COULEUR</label>
+    <div id="p-colors" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+  </div>
+  <div class="fg">
+    <label class="lbl">PHOTO / AVATAR</label>
+    <div class="uarea" onclick="document.getElementById('pp').click()">
+      <div class="utxt">CLIQUER POUR UNE IMAGE</div>
+      <input type="file" id="pp" accept="image/*" style="display:none"/>
+    </div>
+    <div id="pp-prev"></div>
+  </div>
+  <div class="brow"><button class="bg" onclick="cm('pModal')">ANNULER</button><button class="bp" onclick="submitPlayer()">AJOUTER</button></div>
+ </div>
+</div>
+
+<!-- ADD GAME MODAL -->
+<div id="gModal" class="ov" style="display:none" onclick="if(event.target===this)cm('gModal')">
+ <div class="modal fi">
+  <div class="mtitle">🎮 AJOUTER JEU</div>
+  <div class="fg"><label class="lbl">NOM DU JEU</label><input type="text" id="g-name" placeholder="EX: CATAN"/></div>
+  <div class="fg"><label class="lbl">EMOJI</label><input type="text" id="g-emoji" placeholder="🎲" style="width:80px;font-size:18px"/></div>
+  <div class="fg">
+    <label class="lbl">IMAGE DE COUVERTURE</label>
+    <div class="uarea" onclick="document.getElementById('gp').click()">
+      <div class="utxt">CLIQUER POUR UNE IMAGE</div>
+      <input type="file" id="gp" accept="image/*" style="display:none"/>
+    </div>
+    <div id="gp-prev"></div>
+  </div>
+  <div class="brow"><button class="bg" onclick="cm('gModal')">ANNULER</button><button class="bp" onclick="submitGame()">AJOUTER</button></div>
+ </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="dModal" class="ov" style="display:none" onclick="if(event.target===this)cm('dModal')">
+ <div class="modal fi">
+  <div id="detail-inner"></div>
+  <button class="bg" style="width:100%;margin-top:16px" onclick="cm('dModal')">FERMER</button>
+ </div>
+</div>
+
+<!-- WHEEL MODAL -->
+<div id="wModal" class="ov" style="display:none" onclick="if(event.target===this)cm('wModal')">
+ <div class="modal fi" style="border-color:var(--yellow);box-shadow:6px 6px 0 var(--yellow);text-align:center;max-width:340px">
+  <div class="mtitle" style="text-align:center">🎰 QUEL JEU CE SOIR ?</div>
+  <div class="wwrap">
+    <canvas id="wcanv" width="260" height="260" style="border:3px solid var(--yellow);box-shadow:4px 4px 0 var(--yellow)"></canvas>
+    <div id="wres" class="wres">APPUYER POUR TOURNER !</div>
+    <button class="wspin" onclick="spinWheel()">🎲 SPIN !</button>
+  </div>
+  <button class="bg" style="width:100%" onclick="cm('wModal')">FERMER</button>
+ </div>
+</div>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const BG=[
+  {id:"dobble",name:"Dobble",emoji:"🔴",img:null},
+  {id:"faraway",name:"Faraway",emoji:"🗺️",img:null},
+  {id:"battle-sheep",name:"Battle Sheep",emoji:"🐑",img:null},
+  {id:"sea-salt",name:"Sea Salt & Paper",emoji:"🦀",img:null},
+  {id:"quoridor",name:"Quoridor",emoji:"🧱",img:null},
+  {id:"splendor",name:"Splendor",emoji:"💎",img:null},
+  {id:"catan",name:"CATAN",emoji:"🌾",img:null},
+  {id:"7wonders",name:"7 Wonders",emoji:"🏛️",img:null},
+  {id:"splendor-duel",name:"Splendor Duel",emoji:"♟️",img:null},
+  {id:"celestia",name:"Celestia",emoji:"✈️",img:null},
+  {id:"perfect-words",name:"Perfect Words",emoji:"📝",img:null},
+  {id:"perudo",name:"Perudo",emoji:"🎲",img:null},
+  {id:"squadro",name:"Squadro",emoji:"⬆️",img:null},
+  {id:"aventuriers",name:"Les Aventuriers du Rail",emoji:"🚂",img:null},
+  {id:"roi-nains",name:"Le Roi des Nains",emoji:"👑",img:null},
+  {id:"quarto",name:"Quarto",emoji:"⬛",img:null},
+  {id:"break-code",name:"Break the Code",emoji:"🔐",img:null},
+  {id:"stella",name:"Stella – Dixit Universe",emoji:"🌟",img:null},
+  {id:"hutan",name:"HUTAN",emoji:"🌿",img:null},
+  {id:"tarot",name:"Tarot",emoji:"🃏",img:null},
+];
+const COLS=["#f7c948","#ff5f87","#3dffd0","#b57aff","#5b8fff","#ff9f43","#3dff9a","#ff4757"];
+const ACCS=["#f7c948","#ff5f87","#3dffd0","#b57aff","#5b8fff","#ff9f43","#3dff9a"];
+const MEDALS=["🥇","🥈","🥉"];
+
+// FIREBASE CONFIG
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyB-T-nqLAI8PXR5vfDE0w6DC3G6_hfp0zw",
+  authDomain:        "gamelab-night.firebaseapp.com",
+  databaseURL:       "https://gamelab-night-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "gamelab-night",
+  storageBucket:     "gamelab-night.firebasestorage.app",
+  messagingSenderId: "1053785811460",
+  appId:             "1:1053785811460:web:461773c255d87f7f042351"
+};
+
+// STATE — loaded from Firebase on startup
+let players=[], customs=[], stats={}, feed=[];
+let selCol=COLS[0];
+let mSel=[], mWin="", emId="", epId=null;
+let pmpho=[], empho=[], ppho=null, gpho=null;
+let dbRef=null;
+
+// ── SYNC STATUS ───────────────────────────────────────────────────────────────
+function setSyncStatus(state, txt){
+  const dot=document.getElementById("syncdot");
+  const lbl=document.getElementById("synctxt");
+  if(!dot||!lbl)return;
+  const colors={ok:"#3dff9a",saving:"#f7c948",err:"#ff4757"};
+  dot.style.background=colors[state]||"#6b6b9a";
+  dot.style.animation=state==="saving"?"blink .5s infinite":"none";
+  lbl.style.color=state==="ok"?"#3dff9a":state==="err"?"#ff4757":"#f7c948";
+  lbl.textContent=txt;
+}
+
+// ── SAVE TO FIREBASE ──────────────────────────────────────────────────────────
+function sv(){
+  if(!dbRef){ console.warn("No dbRef"); return; }
+  setSyncStatus("saving","SAUVEGARDE...");
+  dbRef.set({players, customs, feed})
+    .then(()=>{ setSyncStatus("ok","✓ EN LIGNE"); setTimeout(()=>setSyncStatus("ok","EN LIGNE"),2500); })
+    .catch(e=>{ setSyncStatus("err","ERREUR SAVE"); console.error(e); });
+}
+function ag(){return[...BG,...customs]}
+function gg(id){return ag().find(g=>g.id===id)}
+const wr=(v,p)=>p>0?Math.round(v/p*100):0;
+const med=(i)=>MEDALS[i]||("#"+(i+1));
+function gt(pid){return Object.values(stats[pid]||{}).reduce((a,s)=>({parties:a.parties+s.parties,victoires:a.victoires+s.victoires}),{parties:0,victoires:0})}
+function fd(d){if(!d)return"—";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"2-digit"})}
+function rbs(){
+  stats={};
+  feed.forEach(f=>{(f.playerIds||[]).forEach(pid=>{
+    if(!stats[pid])stats[pid]={};
+    if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0};
+    stats[pid][f.gameId].parties++;
+    if(pid===f.winnerId)stats[pid][f.gameId].victoires++;
+  })});
+}
+function cm(id){document.getElementById(id).style.display="none"}
+function lb(src){document.getElementById("lbimg").src=src;document.getElementById("lb").style.display="flex"}
+
+// IMAGE COMPRESSION
+function compress(file,mx,q){
+  return new Promise(res=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const c=document.createElement("canvas");
+        let w=img.width,h=img.height;
+        if(w>h&&w>mx){h=Math.round(h*mx/w);w=mx}
+        else if(h>mx){w=Math.round(w*mx/h);h=mx}
+        c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);
+        res(c.toDataURL("image/jpeg",q||.75));
+      };img.src=e.target.result;
+    };r.readAsDataURL(file);
+  });
+}
+
+// MULTI PHOTO PREVIEW
+function rpp(cid,arr){
+  const c=document.getElementById(cid);c.innerHTML="";
+  arr.forEach((src,i)=>{
+    const w=document.createElement("div");w.style.cssText="position:relative;display:inline-block";
+    const im=document.createElement("img");im.src=src;im.style.cssText="width:70px;height:70px;object-fit:cover;border:2px solid var(--border)";
+    const bt=document.createElement("button");bt.innerHTML="✕";bt.className="rim";
+    bt.onclick=()=>{arr.splice(i,1);rpp(cid,arr)};
+    w.appendChild(im);w.appendChild(bt);c.appendChild(w);
+  });
+}
+
+// TABS
+function sw(id,el){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+  document.getElementById("pg-"+id).classList.add("on");
+  el.classList.add("on");
+  render(id);
+}
+function render(id){
+  if(id==="accueil")rAccueil();
+  else if(id==="classement")rClass();
+  else if(id==="jeux")rJeux();
+  else if(id==="historique")rHisto();
+  else if(id==="joueurs")rJoueurs();
+}
+function rAll(){const a=document.querySelector(".page.on");if(a)render(a.id.replace("pg-",""))}
+
+// ── ACCUEIL ───────────────────────────────────────────────────────────────────
+function rAccueil(){
+  const lb2=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.victoires-a.victoires||b.parties-a.parties);
+  const recent=feed.slice(0,6);
+  const allpho=[];feed.forEach(f=>(f.photos||[]).forEach(ph=>allpho.push({src:ph,game:gg(f.gameId)?.name,date:f.date})));
+  const photos=allpho.slice(0,12);
+  const totG=ag().filter(g=>players.some(p=>stats[p.id]?.[g.id]?.parties>0)).length;
+  const topG=ag().map(g=>({...g,tot:players.reduce((s,p)=>s+(stats[p.id]?.[g.id]?.parties||0),0)})).sort((a,b)=>b.tot-a.tot)[0];
+
+  let h=`<div class="hero">
+    <div class="htitle">🎲 GAME NIGHT 🎲</div>
+    <div class="hsub">${feed.length} PARTIES • ${players.length} JOUEURS • ${totG} JEUX</div>
+    <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;position:relative">
+      <button class="hbtn" onclick="openWheelModal()">🎰 CHOISIR UN JEU</button>
+      <button class="hbtn hp" onclick="openMatchModal()">+ NOUVELLE PARTIE</button>
+    </div>
+  </div>
+  <div class="hgrid">
+    <div class="hpanel px-y">
+      <div class="hptitle" style="color:var(--yellow)">🏆 TOP JOUEURS</div>
+      ${lb2.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUN JOUEUR</div>`:
+      lb2.slice(0,5).map((p,i)=>{
+        const av=p.photo?`<div class="av" style="width:30px;height:30px;border-color:${p.color}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:30px;height:30px;background:${p.color};color:#000;font-size:9px">${p.name[0]}</div>`;
+        return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:14px;width:22px">${med(i)}</span>${av}
+          <span style="font-size:8px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${p.name}</span>
+          <span style="font-size:8px;color:var(--yellow)">${p.victoires}🏆</span>
+        </div>`;
+      }).join("")}
+    </div>
+    <div class="hpanel px-p">
+      <div class="hptitle" style="color:var(--pink)">🕹️ DERNIÈRES PARTIES</div>
+      ${recent.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUNE PARTIE</div>`:
+      recent.map(f=>{
+        const game=gg(f.gameId);const winner=players.find(p=>p.id===f.winnerId);
+        return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:16px">${game?.emoji||"🎲"}</span>
+          <div style="flex:1;min-width:0"><div style="font-size:7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${game?.name||f.gameId}</div>
+          <div style="font-size:7px;color:var(--muted);margin-top:2px">${fd(f.date)}</div></div>
+          ${winner?`<span style="font-size:7px;color:var(--green)">🏆${winner.name}</span>`:""}
+        </div>`;
+      }).join("")}
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+    ${[["🎮",totG,"JEUX JOUÉS","var(--cyan)"],["⚔️",feed.length,"PARTIES TOTALES","var(--pink)"],["🏆",lb2[0]?.victoires||0,lb2[0]?"RECORD: "+lb2[0].name:"RECORD","var(--yellow)"],["🎲",topG?.tot||0,topG?"TOP: "+topG.name:"TOP JEU","var(--purple)"]].map(([e,v,l,c])=>`
+      <div style="background:var(--bg2);border:3px solid ${c};box-shadow:4px 4px 0 ${c};padding:14px;text-align:center">
+        <div style="font-size:20px;margin-bottom:6px">${e}</div>
+        <div style="font-size:18px;color:${c};text-shadow:2px 2px 0 #000;font-family:'Press Start 2P',monospace">${v}</div>
+        <div style="font-size:7px;color:var(--muted);margin-top:4px;line-height:1.8">${l}</div>
+      </div>`).join("")}
+  </div>`;
+
+  if(photos.length){
+    h+=`<div style="background:var(--bg2);border:3px solid var(--purple);box-shadow:4px 4px 0 var(--purple);padding:16px;margin-bottom:20px">
+      <div style="font-size:8px;color:var(--purple);letter-spacing:2px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border)">📸 GALERIE PHOTOS</div>
+      <div class="pgrid">${photos.map(ph=>`<img class="pt" src="${ph.src}" onclick="lb('${ph.src}')" loading="lazy"/>`).join("")}</div>
+    </div>`;
+  }
+  document.getElementById("pg-accueil").innerHTML=h;
+}
+
+// ── CLASSEMENT ────────────────────────────────────────────────────────────────
+function rClass(){
+  const lb=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.victoires-a.victoires||b.parties-a.parties);
+  const mx=Math.max(1,...lb.map(p=>p.victoires));
+  let h=`<div class="stitle">🏆 CLASSEMENT GÉNÉRAL</div>`;
+  if(!lb.length){h+=`<div class="empty">AUCUN JOUEUR.<br>AJOUTEZ DES JOUEURS DANS 👾.</div>`;document.getElementById("pg-classement").innerHTML=h;return}
+  lb.forEach((p,i)=>{
+    const r=wr(p.victoires,p.parties);const bp=Math.round(p.victoires/mx*100);
+    const j=Object.keys(stats[p.id]||{}).filter(g=>(stats[p.id][g]?.parties||0)>0).length;
+    const ac=ACCS[i%ACCS.length];
+    const av=p.photo?`<div class="av" style="width:54px;height:54px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:54px;height:54px;background:${p.color};color:#000;font-size:16px">${p.name[0]}</div>`;
+    h+=`<div class="card ac${i%7}">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px;width:32px;text-align:center">${med(i)}</span>
+        ${av}
+        <div style="flex:1">
+          <div style="font-size:11px;margin-bottom:4px">${p.name}</div>
+          <div style="font-size:7px;color:var(--muted)">${j} JEUX JOUÉS</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;color:var(--yellow);text-shadow:2px 2px 0 #b07000">${p.victoires}</div>
+          <div style="font-size:7px;color:var(--muted)">VICTOIRES</div>
+        </div>
+      </div>
+      <div class="barw"><div class="barbg"><div class="barfill" style="width:${bp}%;background:${ac}"></div></div>
+        <span style="font-size:9px;color:${ac};min-width:36px;text-align:right">${r}%</span>
+      </div>
+      <div class="srow">
+        ${[["⚔️",p.parties,"PARTIES"],["🏆",p.victoires,"VICTOIRES"],["📊",r+"%","WIN RATE"],["🎮",j,"JEUX"]].map(([e,v,l])=>`<div style="text-align:center;min-width:54px"><div class="sv" style="font-size:13px">${e}${v}</div><div class="sl">${l}</div></div>`).join("")}
+      </div>
+    </div>`;
+  });
+  document.getElementById("pg-classement").innerHTML=h;
+}
+
+// ── JEUX ──────────────────────────────────────────────────────────────────────
+function rJeux(){
+  const games=ag().map((g,gi)=>{
+    const tot=players.reduce((s,p)=>s+(stats[p.id]?.[g.id]?.parties||0),0);
+    const ldr=players.map(p=>({...p,v:stats[p.id]?.[g.id]?.victoires||0})).sort((a,b)=>b.v-a.v)[0];
+    return{...g,tot,ldr,gi};
+  }).sort((a,b)=>b.tot-a.tot);
+  const played=games.filter(g=>g.tot>0);
+  const zeros=games.filter(g=>g.tot===0);
+
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div class="stitle" style="margin:0">🎮 JEUX (${ag().length})</div>
+    <button class="hbtn" onclick="openGameModal()">+ AJOUTER JEU</button>
+  </div>`;
+
+  if(played.length){
+    h+=`<div class="ggrid">`;
+    played.forEach((g,i)=>{
+      const ac=ACCS[i%ACCS.length];
+      const im=g.img?`<img src="${g.img}" style="width:100%;height:100%;object-fit:cover"/>`:`<span style="font-size:42px">${g.emoji}</span>`;
+      const lh=g.ldr?.v>0?`<div style="font-size:7px;color:var(--muted);margin-top:4px">MEILLEUR: <span style="color:${ac}">${g.ldr.name} (${g.ldr.v}🏆)</span></div>`:"";
+      const canDel=customs.some(cg=>cg.id===g.id);
+      h+=`<div class="gcard ac${i%7}" onclick="openDetail('${g.id}')">
+        <div class="gcimg">${im}</div>
+        <div class="gcbody">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
+            <div style="font-size:9px;margin-bottom:4px;line-height:1.6">${g.emoji} ${g.name}</div>
+            ${canDel?`<button class="dbtn" onclick="event.stopPropagation();delGame('${g.id}')">✕</button>`:""}
+          </div>
+          <div style="font-size:7px;color:var(--muted)">${g.tot} PARTIES</div>
+          ${lh}
+          <div style="font-size:7px;color:var(--border);margin-top:8px;letter-spacing:1px">[ CLIQUER ]</div>
+        </div>
+      </div>`;
+    });
+    h+=`</div>`;
+  } else {
+    h+=`<div class="empty">AUCUNE PARTIE ENCORE.<br>AJOUTEZ UNE PARTIE POUR COMMENCER !</div>`;
+  }
+  if(zeros.length){
+    h+=`<div style="margin-top:20px;padding:14px;border:2px dashed var(--border)">
+      <div style="font-size:8px;color:var(--muted);margin-bottom:10px;letter-spacing:1px">JAMAIS JOUÉS</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${zeros.map((g,i)=>{
+        const canDel=customs.some(cg=>cg.id===g.id);
+        return`<div style="display:inline-flex;align-items:center;gap:4px;font-size:7px;padding:6px 10px;border:2px solid var(--border);color:var(--muted)">
+          ${g.emoji} ${g.name}
+          ${canDel?`<button class="dbtn" style="font-size:10px;padding:0 2px" onclick="delGame('${g.id}')">✕</button>`:""}
+        </div>`;
+      }).join("")}</div>
+    </div>`;
+  }
+  document.getElementById("pg-jeux").innerHTML=h;
+}
+
+// ── HISTORIQUE ────────────────────────────────────────────────────────────────
+function rHisto(){
+  let h=`<div class="stitle">📜 HISTORIQUE (${feed.length})</div>`;
+  if(!feed.length){h+=`<div class="empty">AUCUNE PARTIE DANS L'HISTORIQUE.</div>`;}
+  else feed.forEach(f=>{
+    const game=gg(f.gameId);const winner=players.find(p=>p.id===f.winnerId);
+    const names=(f.playerIds||[]).map(id=>players.find(p=>p.id===id)?.name).filter(Boolean).join(", ");
+    const others=(f.playerIds||[]).filter(id=>id!==f.winnerId).map(id=>players.find(p=>p.id===id)?.name).filter(Boolean).join(", ");
+    const gim=game?.img?`<img src="${game.img}" style="width:100%;height:100%;object-fit:cover"/>`:`<span style="font-size:24px">${game?.emoji||"🎲"}</span>`;
+    const pho=(f.photos||[]);
+    h+=`<div class="fitem">
+      <div class="fthumb">${gim}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:9px;margin-bottom:4px;line-height:1.5">${game?.name||f.gameId}</div>
+        <div style="font-size:7px;color:var(--muted);margin-bottom:4px">${fd(f.date)} • ${names}</div>
+        ${winner?`<div style="font-size:8px;color:var(--green)">🏆 ${winner.name}${others?` <span style="color:var(--muted);font-size:7px">VS ${others}</span>`:""}</div>`:""}
+        ${pho.length?`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(56px,1fr));margin-top:8px">${pho.map(ph=>`<img class="pt" src="${ph}" onclick="lb('${ph}')" loading="lazy"/>`).join("")}</div>`:""}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0">
+        <button class="ebtn" onclick="openEM('${f.id}')" title="Modifier">✏️</button>
+        <button class="dbtn" onclick="delMatch('${f.id}')" title="Supprimer">✕</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById("pg-historique").innerHTML=h;
+}
+
+// ── JOUEURS ───────────────────────────────────────────────────────────────────
+function rJoueurs(){
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div class="stitle" style="margin:0">👾 JOUEURS (${players.length})</div>
+    <button class="hbtn" onclick="openPM()">+ AJOUTER</button>
+  </div>`;
+  if(!players.length){h+=`<div class="empty">AUCUN JOUEUR ENCORE.<br>AJOUTEZ DES JOUEURS !</div>`;}
+  players.forEach((p,i)=>{
+    const tot=gt(p.id);const ac=p.color||COLS[i%COLS.length];
+    const best=ag().map(g=>({...g,v:stats[p.id]?.[g.id]?.victoires||0})).filter(g=>g.v>0).sort((a,b)=>b.v-a.v)[0];
+    const av=p.photo?`<div class="av" style="width:72px;height:72px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:72px;height:72px;background:${ac};color:#000;font-size:24px">${p.name[0]}</div>`;
+    h+=`<div class="card ac${i%7}">
+      <div style="display:flex;align-items:center;gap:14px">
+        ${av}
+        <div style="flex:1">
+          <div style="font-size:12px;margin-bottom:6px">${p.name}</div>
+          ${best?`<div style="font-size:7px;color:var(--muted)">TOP: ${best.emoji} ${best.name} (${best.v}🏆)</div>`:""}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="ebtn" onclick="openEP('${p.id}')" title="Modifier">✏️</button>
+          <button class="dbtn" style="font-size:16px" onclick="delPlayer('${p.id}')" title="Supprimer">🗑️</button>
+        </div>
+      </div>
+      <div class="srow">
+        <div style="text-align:center;min-width:60px"><div class="sv">${tot.parties}</div><div class="sl">PARTIES</div></div>
+        <div style="text-align:center;min-width:60px"><div class="sv">${tot.victoires}</div><div class="sl">VICTOIRES</div></div>
+        <div style="text-align:center;min-width:60px"><div class="sv">${wr(tot.victoires,tot.parties)}%</div><div class="sl">WIN RATE</div></div>
+      </div>
+    </div>`;
+  });
+  document.getElementById("pg-joueurs").innerHTML=h;
+}
+
+// ── MATCH MODAL ───────────────────────────────────────────────────────────────
+function openMatchModal(){
+  const sel=document.getElementById("m-game");
+  sel.innerHTML=`<option value="">— CHOISIR UN JEU —</option>`;
+  ag().forEach(g=>sel.innerHTML+=`<option value="${g.id}">${g.emoji} ${g.name}</option>`);
+  document.getElementById("m-date").value=new Date().toISOString().split("T")[0];
+  mSel=[];mWin="";pmpho=[];
+  document.getElementById("mph-prev").innerHTML="";
+  rMChips();
+  document.getElementById("ms1").style.display="block";
+  document.getElementById("ms2").style.display="none";
+  document.getElementById("mModal").style.display="flex";
+  document.getElementById("mph").onchange=async function(){
+    for(const f of this.files){pmpho.push(await compress(f,800,.75))}
+    rpp("mph-prev",pmpho);this.value="";
+  };
+}
+function rMChips(){
+  const c=document.getElementById("m-players");c.innerHTML="";
+  players.forEach(p=>{
+    const b=document.createElement("button");
+    b.className="chip"+(mSel.includes(p.id)?" sel":"");
+    b.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.name}`;
+    b.onclick=()=>{mSel.includes(p.id)?mSel=mSel.filter(x=>x!==p.id):mSel.push(p.id);if(!mSel.includes(mWin))mWin="";rMChips()};
+    c.appendChild(b);
+  });
+}
+function mNext(){
+  if(!document.getElementById("m-game").value||!mSel.length)return;
+  rWChips(document.getElementById("m-winners"),"m-winners");
+  document.getElementById("ms1").style.display="none";
+  document.getElementById("ms2").style.display="block";
+}
+function rWChips(c,cid){
+  c.innerHTML="";
+  mSel.forEach(pid=>{
+    const p=players.find(x=>x.id===pid);if(!p)return;
+    const b=document.createElement("button");
+    b.className="chip sel"+(mWin===pid?" win":"");
+    b.dataset.pid=pid;
+    b.innerHTML=(mWin===pid?"🥇 ":"")+p.name;
+    b.onclick=()=>{mWin=pid;rWChips(document.getElementById(cid),cid)};
+    c.appendChild(b);
+  });
+}
+function submitMatch(){
+  const gid=document.getElementById("m-game").value;
+  const date=document.getElementById("m-date").value;
+  if(!gid||!mSel.length||!mWin)return;
+  feed.unshift({id:Date.now().toString(),gameId:gid,playerIds:[...mSel],winnerId:mWin,date,photos:[...pmpho]});
+  if(feed.length>500)feed=feed.slice(0,500);
+  rbs();sv();cm("mModal");rAll();
+}
+
+// ── EDIT MATCH ────────────────────────────────────────────────────────────────
+function openEM(id){
+  emId=id;const f=feed.find(x=>x.id===id);if(!f)return;
+  document.getElementById("e-date").value=f.date||"";
+  empho=[...(f.photos||[])];
+  rpp("eph-prev",empho);
+  const c=document.getElementById("e-winners");c.innerHTML="";
+  (f.playerIds||[]).forEach(pid=>{
+    const p=players.find(x=>x.id===pid);if(!p)return;
+    const b=document.createElement("button");
+    b.className="chip sel"+(f.winnerId===pid?" win":"");
+    b.dataset.pid=pid;
+    b.innerHTML=(f.winnerId===pid?"🥇 ":"")+p.name;
+    b.onclick=()=>{
+      c.querySelectorAll(".chip").forEach(x=>{x.classList.remove("win");x.innerHTML=players.find(pl=>pl.id===x.dataset.pid)?.name||""});
+      b.classList.add("win");b.innerHTML="🥇 "+p.name;
+    };
+    c.appendChild(b);
+  });
+  document.getElementById("eph").onchange=async function(){
+    for(const f of this.files){empho.push(await compress(f,800,.75))}
+    rpp("eph-prev",empho);this.value="";
+  };
+  document.getElementById("emModal").style.display="flex";
+}
+function submitEM(){
+  const f=feed.find(x=>x.id===emId);if(!f)return;
+  const wb=document.querySelector("#e-winners .chip.win");
+  if(wb)f.winnerId=wb.dataset.pid;
+  const d=document.getElementById("e-date").value;if(d)f.date=d;
+  f.photos=[...empho];
+  rbs();sv();cm("emModal");rAll();
+}
+function delMatch(id){
+  if(!confirm("SUPPRIMER CETTE PARTIE ?"))return;
+  feed=feed.filter(f=>f.id!==id);rbs();sv();rAll();
+}
+
+// ── PLAYER MODAL ──────────────────────────────────────────────────────────────
+function openPM(){
+  epId=null;ppho=null;
+  document.getElementById("p-name").value="";
+  document.getElementById("pp-prev").innerHTML="";
+  document.getElementById("pModalTitle").textContent="👾 AJOUTER JOUEUR";
+  selCol=COLS[players.length%COLS.length];
+  bCols();
+  document.getElementById("pModal").style.display="flex";
+  setTimeout(()=>document.getElementById("p-name").focus(),100);
+  document.getElementById("pp").onchange=async function(){
+    if(!this.files[0])return;
+    ppho=await compress(this.files[0],300,.85);
+    document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;
+  };
+}
+function openEP(id){
+  epId=id;const p=players.find(x=>x.id===id);if(!p)return;
+  document.getElementById("p-name").value=p.name;
+  ppho=p.photo||null;
+  document.getElementById("pp-prev").innerHTML=ppho?`<img class="prev" src="${ppho}"/>`:"";
+  document.getElementById("pModalTitle").textContent="✏️ MODIFIER JOUEUR";
+  selCol=p.color||COLS[0];bCols();
+  document.getElementById("pModal").style.display="flex";
+  document.getElementById("pp").onchange=async function(){
+    if(!this.files[0])return;
+    ppho=await compress(this.files[0],300,.85);
+    document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;
+  };
+}
+function bCols(){
+  const c=document.getElementById("p-colors");c.innerHTML="";
+  COLS.forEach(col=>{
+    const d=document.createElement("div");
+    d.style.cssText=`width:28px;height:28px;background:${col};border:3px solid ${col===selCol?"#fff":"transparent"};cursor:pointer;transition:.1s`;
+    d.onclick=()=>{selCol=col;bCols()};
+    c.appendChild(d);
+  });
+}
+function submitPlayer(){
+  const name=document.getElementById("p-name").value.trim().toUpperCase();if(!name)return;
+  if(epId){
+    const p=players.find(x=>x.id===epId);
+    if(p){p.name=name;p.color=selCol;if(ppho)p.photo=ppho}
+  } else {
+    players.push({id:Date.now().toString(),name,color:selCol,photo:ppho||null});
+  }
+  sv();cm("pModal");rAll();
+}
+function delPlayer(id){
+  const p=players.find(x=>x.id===id);
+  if(!confirm(`SUPPRIMER "${p?.name}" ?`))return;
+  players=players.filter(x=>x.id!==id);
+  feed=feed.map(f=>({...f,playerIds:(f.playerIds||[]).filter(pid=>pid!==id),winnerId:f.winnerId===id?null:f.winnerId})).filter(f=>(f.playerIds||[]).length>0);
+  rbs();sv();rAll();
+}
+
+// ── GAME MODAL ────────────────────────────────────────────────────────────────
+function openGameModal(){
+  document.getElementById("g-name").value="";
+  document.getElementById("g-emoji").value="🎮";
+  gpho=null;document.getElementById("gp-prev").innerHTML="";
+  document.getElementById("gModal").style.display="flex";
+  document.getElementById("gp").onchange=async function(){
+    if(!this.files[0])return;
+    gpho=await compress(this.files[0],600,.8);
+    document.getElementById("gp-prev").innerHTML=`<img class="prevw" src="${gpho}"/>`;
+  };
+}
+function submitGame(){
+  const name=document.getElementById("g-name").value.trim();
+  const emoji=document.getElementById("g-emoji").value.trim()||"🎮";
+  if(!name)return;
+  customs.push({id:"c"+Date.now(),name,emoji,img:gpho||null});
+  sv();cm("gModal");rJeux();
+}
+function delGame(id){
+  if(!confirm("SUPPRIMER CE JEU ?"))return;
+  customs=customs.filter(g=>g.id!==id);sv();rJeux();
+}
+
+// ── DETAIL MODAL ──────────────────────────────────────────────────────────────
+function openDetail(gid){
+  const game=gg(gid);if(!game)return;
+  const rows=players.map(p=>({...p,...(stats[p.id]?.[gid]||{parties:0,victoires:0})})).sort((a,b)=>b.victoires-a.victoires);
+  const gpho2=[];feed.filter(f=>f.gameId===gid).forEach(f=>(f.photos||[]).forEach(ph=>gpho2.push(ph)));
+  let h=`<div style="font-size:13px;color:var(--yellow);text-shadow:2px 2px 0 #b07000;margin-bottom:14px">${game.emoji} ${game.name}</div>`;
+  if(game.img)h+=`<img src="${game.img}" style="width:100%;height:130px;object-fit:cover;border:3px solid var(--border);margin-bottom:14px"/>`;
+  rows.forEach((r,i)=>{
+    const rate=wr(r.victoires,r.parties);const ac=ACCS[i%ACCS.length];
+    const av=r.photo?`<div class="av" style="width:28px;height:28px;border-color:${ac}"><img src="${r.photo}"/></div>`:`<div class="av" style="width:28px;height:28px;background:${r.color||"#888"};color:#000;font-size:9px">${r.name[0]}</div>`;
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:2px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;width:24px">${med(i)}</span>${av}
+        <span style="font-size:8px">${r.name}</span>
+      </div>
+      <div style="display:flex;gap:12px;font-size:8px">
+        <span style="color:var(--muted)">${r.parties}p</span>
+        <span style="color:var(--green)">${r.victoires}🏆</span>
+        <span style="color:${rate>=50?"var(--yellow)":"var(--muted)"}">${rate}%</span>
+      </div>
+    </div>`;
+  });
+  if(gpho2.length)h+=`<div style="margin-top:14px"><div style="font-size:8px;color:var(--purple);margin-bottom:8px;letter-spacing:1px">📸 PHOTOS</div><div class="pgrid">${gpho2.map(ph=>`<img class="pt" src="${ph}" onclick="lb('${ph}')"/>`).join("")}</div></div>`;
+  document.getElementById("detail-inner").innerHTML=h;
+  document.getElementById("dModal").style.display="flex";
+}
+
+// ── WHEEL ─────────────────────────────────────────────────────────────────────
+let wAngle=0,wSpinning=false;
+function openWheelModal(){
+  document.getElementById("wModal").style.display="flex";
+  document.getElementById("wres").textContent="APPUYER POUR TOURNER !";
+  drawWheel(wAngle);
+}
+function drawWheel(ang){
+  const cv=document.getElementById("wcanv");if(!cv)return;
+  const ctx=cv.getContext("2d");
+  const played=ag().filter(g=>players.some(p=>(stats[p.id]?.[g.id]?.parties||0)>0));
+  const list=played.length>1?played:ag().slice(0,Math.min(8,ag().length));
+  const n=list.length;if(!n)return;
+  const cx=130,cy=130,r=118;
+  ctx.clearRect(0,0,260,260);
+  list.forEach((g,i)=>{
+    const s=ang+i*(2*Math.PI/n),e=s+2*Math.PI/n;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,s,e);ctx.closePath();
+    ctx.fillStyle=ACCS[i%ACCS.length];ctx.fill();
+    ctx.strokeStyle="#000";ctx.lineWidth=2;ctx.stroke();
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(s+Math.PI/n);
+    ctx.fillStyle="#000";ctx.font="bold 7px 'Press Start 2P',monospace";
+    ctx.textAlign="right";
+    const label=(g.emoji+" "+g.name).substring(0,15);
+    ctx.fillText(label,r-6,3);
+    ctx.restore();
+  });
+  // rim
+  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.strokeStyle="#000";ctx.lineWidth=4;ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,r-2,0,2*Math.PI);ctx.strokeStyle=ACCS[Math.floor(wAngle)%ACCS.length];ctx.lineWidth=2;ctx.stroke();
+  // center
+  ctx.beginPath();ctx.arc(cx,cy,16,0,2*Math.PI);ctx.fillStyle="#000";ctx.fill();ctx.strokeStyle=ACCS[0];ctx.lineWidth=3;ctx.stroke();
+  ctx.font="13px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("🎲",cx,cy);
+  // pointer
+  ctx.beginPath();ctx.moveTo(cx+r+8,cy);ctx.lineTo(cx+r-8,cy-10);ctx.lineTo(cx+r-8,cy+10);ctx.closePath();
+  ctx.fillStyle=ACCS[0];ctx.fill();ctx.strokeStyle="#000";ctx.lineWidth=2;ctx.stroke();
+}
+function spinWheel(){
+  if(wSpinning)return;
+  const played=ag().filter(g=>players.some(p=>(stats[p.id]?.[g.id]?.parties||0)>0));
+  const list=played.length>1?played:ag().slice(0,Math.min(8,ag().length));
+  if(!list.length)return;
+  wSpinning=true;
+  document.getElementById("wres").textContent="...";
+  const total=Math.PI*2*(8+Math.random()*5);
+  const dur=3200;const t0=Date.now();const a0=wAngle;
+  (function step(){
+    const el=Date.now()-t0;const t=Math.min(el/dur,1);
+    const ease=1-Math.pow(1-t,4);
+    wAngle=a0+total*ease;
+    drawWheel(wAngle);
+    if(t<1){requestAnimationFrame(step)}
+    else{
+      wSpinning=false;
+      const n=list.length;
+      const norm=(((-wAngle%(2*Math.PI))+2*Math.PI)%(2*Math.PI));
+      const idx=Math.floor(norm/(2*Math.PI/n))%n;
+      document.getElementById("wres").textContent="→S "+list[idx].emoji+" "+list[idx].name+" !";
+    }
+  })();
+}
+
+// ── FIREBASE INIT ─────────────────────────────────────────────────────────────
+function initFirebase(){
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dbRef = firebase.database().ref("gamenight");
+
+    // Real-time listener — fires immediately on load, then on every change by any user
+    dbRef.on("value", snap => {
+      const data = snap.val() || {};
+      players = data.players || [];
+      customs = data.customs || [];
+      feed    = data.feed    || [];
+      rbs();
+      setSyncStatus("ok", "EN LIGNE");
+      rAll();
+    }, err => {
+      console.error("Firebase read error:", err);
+      setSyncStatus("err", "ERREUR FIREBASE");
+    });
+
+  } catch(e) {
+    console.error("Firebase init error:", e);
+    setSyncStatus("err", "ERREUR INIT");
+    rAccueil(); // fallback render
+  }
+}
+
+initFirebase();
+</script>
+</body>
+</html>
