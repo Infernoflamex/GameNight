@@ -11,10 +11,13 @@
   --yellow:#f7c948;--pink:#ff5f87;--cyan:#3dffd0;--purple:#b57aff;
   --blue:#5b8fff;--orange:#ff9f43;--green:#3dff9a;--red:#ff4757;
   --white:#f0e6ff;--muted:#6b6b9a;--border:#2a2a4a;
+  --fs-scale:1;
 }
 *{box-sizing:border-box;margin:0;padding:0;image-rendering:pixelated}
-body{background:var(--bg);color:var(--white);font-family:'Press Start 2P',monospace;min-height:100vh;overflow-x:hidden}
+body{background:var(--bg);color:var(--white);font-family:'Press Start 2P',monospace;min-height:100vh;overflow-x:hidden;font-size:calc(1px * var(--fs-scale))}
 img{image-rendering:auto!important;image-rendering:-webkit-optimize-contrast!important}
+#bg-layer{position:fixed;inset:0;z-index:0;background-size:cover;background-position:center;pointer-events:none;display:none}
+#hdr,#cnt{position:relative;z-index:1}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg2)}::-webkit-scrollbar-thumb{background:var(--purple);border:2px solid var(--bg)}
 
 .px-y{border:3px solid var(--yellow);box-shadow:4px 4px 0 var(--yellow)}
@@ -40,7 +43,7 @@ img{image-rendering:auto!important;image-rendering:-webkit-optimize-contrast!imp
 .tab:hover:not(.on){color:var(--white)}
 
 /* CONTENT */
-#cnt{padding:20px;max-width:960px;margin:0 auto}
+#cnt{padding:20px;max-width:960px;margin:0 auto;transform-origin:top center}
 .page{display:none}.page.on{display:block}
 .stitle{font-size:9px;color:var(--cyan);letter-spacing:2px;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid var(--border)}
 
@@ -167,12 +170,23 @@ select option{background:var(--bg2)}
 .ac5{border-color:var(--orange)!important;box-shadow:4px 4px 0 var(--orange)!important}
 .ac6{border-color:var(--green)!important;box-shadow:4px 4px 0 var(--green)!important}
 
+/* SETTINGS */
+.sett-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:2px solid var(--border);gap:12px}
+.sett-label{font-size:8px;color:var(--cyan);letter-spacing:1px;flex-shrink:0}
+.sett-desc{font-size:7px;color:var(--muted);margin-top:3px;line-height:1.6}
+.sett-ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.sfbtn{font-family:'Press Start 2P',monospace;font-size:7px;padding:6px 10px;border:2px solid var(--border);background:var(--bg3);color:var(--muted);cursor:pointer;transition:.1s}
+.sfbtn.on{border-color:var(--yellow);color:var(--yellow);background:var(--bg)}
+.sfbtn:hover:not(.on){color:var(--white);border-color:var(--white)}
+
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .25s ease}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 </style>
 </head>
 <body>
+
+<div id="bg-layer"></div>
 
 <div id="hdr">
   <div class="hdr-top">
@@ -185,6 +199,7 @@ select option{background:var(--bg2)}
         <div id="syncdot" style="width:8px;height:8px;border-radius:50%;background:var(--yellow);animation:blink .7s infinite;flex-shrink:0"></div>
         <span id="synctxt">CONNEXION...</span>
       </div>
+      <button class="hbtn" onclick="openSettings()" title="Paramètres" style="background:var(--bg3);color:var(--cyan);border-color:var(--cyan);box-shadow:3px 3px 0 var(--cyan)">⚙️</button>
       <button class="hbtn hp" onclick="openMatchModal()">+ PARTIE</button>
     </div>
   </div>
@@ -372,6 +387,98 @@ select option{background:var(--bg2)}
  </div>
 </div>
 
+<!-- EDIT GAME IMAGE MODAL -->
+<div id="egModal" class="ov" style="display:none" onclick="if(event.target===this)cm('egModal')">
+ <div class="modal fi">
+  <div class="mtitle" id="egModalTitle">🖼️ MODIFIER JEU</div>
+  <div id="eg-name-row" class="fg" style="display:none">
+    <label class="lbl">NOM</label>
+    <input type="text" id="eg-name" placeholder="NOM DU JEU"/>
+  </div>
+  <div id="eg-emoji-row" class="fg" style="display:none">
+    <label class="lbl">EMOJI</label>
+    <input type="text" id="eg-emoji" style="width:80px;font-size:18px"/>
+  </div>
+  <div class="fg">
+    <label class="lbl">IMAGE DE COUVERTURE</label>
+    <div id="eg-cur" style="margin-bottom:10px"></div>
+    <div class="uarea" onclick="document.getElementById('egp').click()">
+      <div class="utxt">CLIQUER POUR CHANGER L'IMAGE<br><span style="color:var(--purple)">RECOMMANDÉ: IMAGE CARRÉE</span></div>
+      <input type="file" id="egp" accept="image/*" style="display:none"/>
+    </div>
+    <div id="egp-prev"></div>
+  </div>
+  <div class="brow">
+    <button class="bg" onclick="cm('egModal')">ANNULER</button>
+    <button id="eg-del-img" class="bg" style="color:var(--red);border-color:var(--red);display:none" onclick="egRemoveImg()">🗑️ SUPPRIMER IMAGE</button>
+    <button class="bp" onclick="submitEG()">ENREGISTRER ✓</button>
+  </div>
+ </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settModal" class="ov" style="display:none" onclick="if(event.target===this)cm('settModal')">
+ <div class="modal fi" style="border-color:var(--cyan);box-shadow:6px 6px 0 var(--cyan)">
+  <div class="mtitle" style="color:var(--cyan)">⚙️ PARAMÈTRES LOCAUX</div>
+  <div style="font-size:7px;color:var(--muted);margin-bottom:16px;line-height:1.8;padding:8px;border:2px solid var(--border);background:var(--bg3)">
+    Ces réglages sont <span style="color:var(--yellow)">sauvegardés sur cet appareil uniquement</span>.<br>Ils n'affectent pas les autres joueurs.
+  </div>
+
+  <div class="sett-row">
+    <div>
+      <div class="sett-label">TAILLE DU TEXTE</div>
+      <div class="sett-desc">Ajuster pour plus de confort</div>
+    </div>
+    <div class="sett-ctrl">
+      <button class="sfbtn" data-fs="small" onclick="setFontSize('small')">PETIT</button>
+      <button class="sfbtn" data-fs="normal" onclick="setFontSize('normal')">NORMAL</button>
+      <button class="sfbtn" data-fs="large" onclick="setFontSize('large')">GRAND</button>
+    </div>
+  </div>
+
+  <div class="sett-row">
+    <div>
+      <div class="sett-label">ESPACEMENT</div>
+      <div class="sett-desc">Densité de l'affichage</div>
+    </div>
+    <div class="sett-ctrl">
+      <button class="sfbtn" data-sp="compact" onclick="setSpacing('compact')">SERRÉ</button>
+      <button class="sfbtn" data-sp="normal" onclick="setSpacing('normal')">NORMAL</button>
+      <button class="sfbtn" data-sp="airy" onclick="setSpacing('airy')">AÉRÉ</button>
+    </div>
+  </div>
+
+  <div class="sett-row">
+    <div>
+      <div class="sett-label">IMAGE DE FOND</div>
+      <div class="sett-desc">Visible uniquement sur cet appareil</div>
+    </div>
+    <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:6px">
+      <button class="sfbtn" onclick="document.getElementById('bg-file').click()" style="color:var(--green);border-color:var(--green)">📂 CHOISIR</button>
+      <input type="file" id="bg-file" accept="image/*" style="display:none"/>
+      <button class="sfbtn" id="bg-remove" onclick="removeBg()" style="display:none;color:var(--red);border-color:var(--red)">✕ SUPPRIMER</button>
+    </div>
+  </div>
+  <div id="bg-preview" style="margin-top:8px;margin-bottom:4px"></div>
+
+  <div class="sett-row" style="border:none;padding-bottom:0">
+    <div>
+      <div class="sett-label" style="color:var(--orange)">OPACITÉ DU FOND</div>
+      <div class="sett-desc">Si image de fond active</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="range" id="bg-opacity" min="5" max="60" value="20" style="width:100px;accent-color:var(--orange)" oninput="setBgOpacity(this.value)"/>
+      <span id="bg-opacity-val" style="font-size:8px;color:var(--orange);min-width:28px">20%</span>
+    </div>
+  </div>
+
+  <div class="brow" style="margin-top:16px">
+    <button class="bg" onclick="resetSettings()">RÉINITIALISER</button>
+    <button class="bp" onclick="cm('settModal')">FERMER</button>
+  </div>
+ </div>
+</div>
+
 <!-- Firebase compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
@@ -416,7 +523,7 @@ const FIREBASE_CONFIG = {
 };
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let players=[], customs=[], stats={}, feed=[];
+let players=[], customs=[], stats={}, feed=[], gameImages={};
 let selCol=COLS[0];
 let mSel=[],  mRanks={p1:[],p2:[],p3:[]};
 let emId="",  eRanks={p1:[],p2:[],p3:[]};
@@ -439,13 +546,15 @@ function setSyncStatus(state,txt){
 function sv(){
   if(!dbRef)return;
   setSyncStatus("saving","SAUVEGARDE...");
-  dbRef.set({players,customs,feed})
+  dbRef.set({players,customs,feed,gameImages})
     .then(()=>{setSyncStatus("ok","✓ EN LIGNE");setTimeout(()=>setSyncStatus("ok","EN LIGNE"),2500);})
     .catch(e=>{setSyncStatus("err","ERREUR SAVE");console.error(e);});
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
-function ag(){return[...BG,...customs]}
+function ag(){
+  return [...BG.map(g=>({...g,img:gameImages[g.id]||g.img})),...customs];
+}
 function gg(id){return ag().find(g=>g.id===id)}
 const wr=(v,p)=>p>0?Math.round(v/p*100):0;
 const med=(i)=>MEDALS[i]||("#"+(i+1));
@@ -454,8 +563,9 @@ function gt(pid){
     parties:a.parties+s.parties,
     victoires:a.victoires+s.victoires,
     seconds:a.seconds+(s.seconds||0),
-    troisiemes:a.troisiemes+(s.troisiemes||0)
-  }),{parties:0,victoires:0,seconds:0,troisiemes:0});
+    troisiemes:a.troisiemes+(s.troisiemes||0),
+    points:a.points+(s.points||0)
+  }),{parties:0,victoires:0,seconds:0,troisiemes:0,points:0});
 }
 function fd(d){if(!d)return"—";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"2-digit"})}
 
@@ -480,19 +590,20 @@ function rbs(){
   feed.forEach(f=>{
     const rnk=getRankings(f);
     const allPids=f.playerIds||[];
-    const ranked=rnk.flatMap(r=>r.pids);
     allPids.forEach(pid=>{
       if(!stats[pid])stats[pid]={};
-      if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0};
+      if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0};
       stats[pid][f.gameId].parties++;
     });
     rnk.forEach(r=>{
+      const pts=r.place===1?3:r.place===2?2:r.place===3?1:0;
       r.pids.forEach(pid=>{
         if(!stats[pid])stats[pid]={};
-        if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0};
+        if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0};
         if(r.place===1)stats[pid][f.gameId].victoires++;
         if(r.place===2)stats[pid][f.gameId].seconds=(stats[pid][f.gameId].seconds||0)+1;
         if(r.place===3)stats[pid][f.gameId].troisiemes=(stats[pid][f.gameId].troisiemes||0)+1;
+        stats[pid][f.gameId].points=(stats[pid][f.gameId].points||0)+pts;
       });
     });
   });
@@ -710,12 +821,13 @@ function rAccueil(){
 // ── CLASSEMENT ────────────────────────────────────────────────────────────────
 function rClass(){
   const sorts={
-    victoires:(a,b)=>b.victoires-a.victoires||b.parties-a.parties,
-    winrate:(a,b)=>wr(b.victoires,b.parties)-wr(a.victoires,a.parties)||b.parties-a.parties,
+    victoires:(a,b)=>b.victoires-a.victoires||b.points-a.points||b.parties-a.parties,
+    winrate:(a,b)=>wr(b.victoires,b.parties)-wr(a.victoires,a.parties)||b.points-a.points||b.parties-a.parties,
     parties:(a,b)=>b.parties-a.parties||b.victoires-a.victoires,
+    points:(a,b)=>b.points-a.points||b.victoires-a.victoires,
     jeux:(a,b)=>b.jeux-a.jeux||b.victoires-a.victoires
   };
-  const sortLabels={victoires:"VICTOIRES",winrate:"WIN RATE",parties:"PARTIES",jeux:"JEUX DIFF."};
+  const sortLabels={victoires:"VICTOIRES",points:"POINTS",winrate:"WIN RATE",parties:"PARTIES",jeux:"JEUX DIFF."};
   const lb=players.map(p=>{
     const tot=gt(p.id);
     const jeux=Object.keys(stats[p.id]||{}).filter(g=>(stats[p.id][g]?.parties||0)>0).length;
@@ -748,7 +860,7 @@ function rClass(){
         <span style="font-size:9px;color:${ac};min-width:36px;text-align:right">${r}%</span>
       </div>
       <div class="srow">
-        ${[["⚔️",p.parties,"PARTIES"],["🏆",p.victoires,"VICTOIRES"],["📊",r+"%","WIN RATE"],["🎮",p.jeux,"JEUX"]].map(([e,v,l])=>`<div style="text-align:center;min-width:54px"><div class="sv" style="font-size:13px">${e}${v}</div><div class="sl">${l}</div></div>`).join("")}
+        ${[["⚔️",p.parties,"PARTIES"],["🏆",p.victoires,"VICTOIRES"],["⭐",p.points||0,"POINTS"],["📊",r+"%","WIN RATE"]].map(([e,v,l])=>`<div style="text-align:center;min-width:54px"><div class="sv" style="font-size:13px">${e}${v}</div><div class="sl">${l}</div></div>`).join("")}
       </div>
     </div>`;
   });
@@ -798,6 +910,7 @@ function rJeux(){
             <div class="gitem-stat">${lh}</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center">
+            <button class="ebtn" onclick="event.stopPropagation();openEG('${g.id}')" title="Modifier image">✏️</button>
             ${canDel?`<button class="dbtn" onclick="event.stopPropagation();delGame('${g.id}')">✕</button>`:""}
             <span style="font-size:7px;color:var(--border);letter-spacing:1px">[ DÉTAILS ]</span>
           </div>
@@ -812,7 +925,9 @@ function rJeux(){
       <div style="font-size:8px;color:var(--muted);margin-bottom:10px">JAMAIS JOUÉS</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">${zeros.map(g=>{
         const canDel=customs.some(cg=>cg.id===g.id);
-        return`<div style="display:inline-flex;align-items:center;gap:4px;font-size:7px;padding:6px 10px;border:2px solid var(--border);color:var(--muted)">${g.emoji} ${g.name}${canDel?`<button class="dbtn" style="font-size:10px;padding:0 2px" onclick="delGame('${g.id}')">✕</button>`:""}</div>`;
+        return`<div style="display:inline-flex;align-items:center;gap:4px;font-size:7px;padding:6px 10px;border:2px solid var(--border);color:var(--muted)">${g.emoji} ${g.name}
+          <button class="ebtn" style="font-size:10px;padding:0 2px;opacity:.6" onclick="openEG('${g.id}')" title="Modifier">✏️</button>
+          ${canDel?`<button class="dbtn" style="font-size:10px;padding:0 2px" onclick="delGame('${g.id}')">✕</button>`:""}</div>`;
       }).join("")}</div>
     </div>`;
   }
@@ -1266,6 +1381,138 @@ function spinWheel(){
   })();
 }
 
+// ── EDIT GAME ──────────────────────────────────────────────────────────────────
+let egId=null, egNewImg=undefined; // undefined = no change, null = remove, string = new
+function openEG(id){
+  egId=id; egNewImg=undefined;
+  const g=gg(id);if(!g)return;
+  const isCustom=customs.some(c=>c.id===id);
+  // Show name/emoji edit only for custom games
+  document.getElementById("eg-name-row").style.display=isCustom?"block":"none";
+  document.getElementById("eg-emoji-row").style.display=isCustom?"block":"none";
+  if(isCustom){
+    document.getElementById("eg-name").value=g.name;
+    document.getElementById("eg-emoji").value=g.emoji;
+  }
+  document.getElementById("egModalTitle").textContent=`🖼️ ${g.emoji} ${g.name}`;
+  // Show current image
+  const cur=document.getElementById("eg-cur");
+  cur.innerHTML=g.img?`<img src="${g.img}" style="width:100%;max-height:120px;object-fit:cover;border:2px solid var(--border)"/>`:`<div style="font-size:7px;color:var(--muted)">AUCUNE IMAGE ACTUELLE</div>`;
+  document.getElementById("egp-prev").innerHTML="";
+  document.getElementById("eg-del-img").style.display=g.img?"inline-block":"none";
+  document.getElementById("egModal").style.display="flex";
+  document.getElementById("egp").onchange=async function(){
+    if(!this.files[0])return;
+    egNewImg=await compress(this.files[0],1080,0.92);
+    document.getElementById("egp-prev").innerHTML=`<img class="prevw" src="${egNewImg}" style="margin-top:8px"/>`;
+    document.getElementById("eg-del-img").style.display="none";
+  };
+}
+function egRemoveImg(){egNewImg=null;document.getElementById("eg-cur").innerHTML=`<div style="font-size:7px;color:var(--red)">IMAGE SUPPRIMÉE</div>`;document.getElementById("eg-del-img").style.display="none";}
+function submitEG(){
+  const g=gg(egId);if(!g)return;
+  const isCustom=customs.some(c=>c.id===egId);
+  // Handle image
+  if(egNewImg!==undefined){
+    if(isCustom){
+      const c=customs.find(x=>x.id===egId);if(c)c.img=egNewImg;
+    } else {
+      if(egNewImg===null){delete gameImages[egId];}
+      else gameImages[egId]=egNewImg;
+    }
+  }
+  // Handle name/emoji for custom games
+  if(isCustom){
+    const c=customs.find(x=>x.id===egId);
+    if(c){
+      const n=document.getElementById("eg-name").value.trim();
+      const e=document.getElementById("eg-emoji").value.trim();
+      if(n)c.name=n;
+      if(e)c.emoji=e;
+    }
+  }
+  sv();cm("egModal");rAll();
+}
+
+// ── SETTINGS (local — localStorage only) ──────────────────────────────────────
+const SETT_KEY="gn_settings";
+let localSettings={fontSize:"normal",spacing:"normal",bgImage:null,bgOpacity:20};
+
+function loadSettings(){
+  try{const s=localStorage.getItem(SETT_KEY);if(s)localSettings={...localSettings,...JSON.parse(s)};}catch(e){}
+  applySettings();
+}
+function saveSettings(){
+  try{localStorage.setItem(SETT_KEY,JSON.stringify(localSettings));}catch(e){}
+  applySettings();
+}
+function applySettings(){
+  // Font size — scale the content area
+  const fsScales={small:0.82,normal:1,large:1.18};
+  const scale=fsScales[localSettings.fontSize]||1;
+  document.getElementById("cnt").style.transform=`scale(${scale})`;
+  // Spacing
+  const spPad={compact:"12px",normal:"20px",airy:"32px"};
+  document.getElementById("cnt").style.padding=spPad[localSettings.spacing]||"20px";
+  // Background image
+  const bgLayer=document.getElementById("bg-layer");
+  if(bgLayer){
+    if(localSettings.bgImage){
+      bgLayer.style.backgroundImage=`url(${localSettings.bgImage})`;
+      bgLayer.style.opacity=(localSettings.bgOpacity||20)/100;
+      bgLayer.style.display="block";
+    } else {
+      bgLayer.style.display="none";
+    }
+  }
+}
+function openSettings(){
+  // Sync controls to current settings
+  document.querySelectorAll("[data-fs]").forEach(b=>b.classList.toggle("on",b.dataset.fs===localSettings.fontSize));
+  document.querySelectorAll("[data-sp]").forEach(b=>b.classList.toggle("on",b.dataset.sp===localSettings.spacing));
+  const oSlider=document.getElementById("bg-opacity");
+  oSlider.value=localSettings.bgOpacity||20;
+  document.getElementById("bg-opacity-val").textContent=(localSettings.bgOpacity||20)+"%";
+  const removeBtn=document.getElementById("bg-remove");
+  const bgPrev=document.getElementById("bg-preview");
+  removeBtn.style.display=localSettings.bgImage?"inline-block":"none";
+  bgPrev.innerHTML=localSettings.bgImage?`<img src="${localSettings.bgImage}" style="width:100%;max-height:100px;object-fit:cover;border:2px solid var(--border);opacity:.7"/>`:
+    `<div style="font-size:7px;color:var(--muted);padding:8px 0">AUCUNE IMAGE DE FOND</div>`;
+  document.getElementById("bg-file").onchange=async function(){
+    if(!this.files[0])return;
+    // Compress bg image to reasonable size
+    localSettings.bgImage=await compress(this.files[0],1920,0.85);
+    localSettings.bgOpacity=localSettings.bgOpacity||20;
+    saveSettings();
+    removeBtn.style.display="inline-block";
+    bgPrev.innerHTML=`<img src="${localSettings.bgImage}" style="width:100%;max-height:100px;object-fit:cover;border:2px solid var(--border);opacity:.7"/>`;
+    this.value="";
+  };
+  document.getElementById("settModal").style.display="flex";
+}
+function setFontSize(s){
+  localSettings.fontSize=s;saveSettings();
+  document.querySelectorAll("[data-fs]").forEach(b=>b.classList.toggle("on",b.dataset.fs===s));
+}
+function setSpacing(s){
+  localSettings.spacing=s;saveSettings();
+  document.querySelectorAll("[data-sp]").forEach(b=>b.classList.toggle("on",b.dataset.sp===s));
+}
+function setBgOpacity(v){
+  localSettings.bgOpacity=parseInt(v);
+  document.getElementById("bg-opacity-val").textContent=v+"%";
+  saveSettings();
+}
+function removeBg(){
+  localSettings.bgImage=null;saveSettings();
+  document.getElementById("bg-remove").style.display="none";
+  document.getElementById("bg-preview").innerHTML=`<div style="font-size:7px;color:var(--muted);padding:8px 0">AUCUNE IMAGE DE FOND</div>`;
+}
+function resetSettings(){
+  localSettings={fontSize:"normal",spacing:"normal",bgImage:null,bgOpacity:20};
+  saveSettings();openSettings();
+}
+
 // ── FIREBASE INIT ─────────────────────────────────────────────────────────────
 function initFirebase(){
   try{
@@ -1276,6 +1523,7 @@ function initFirebase(){
       players=data.players||[];
       customs=data.customs||[];
       feed=data.feed||[];
+      gameImages=data.gameImages||{};
       rbs();
       setSyncStatus("ok","EN LIGNE");
       rAll();
@@ -1290,6 +1538,7 @@ function initFirebase(){
   }
 }
 initFirebase();
+loadSettings();
 </script>
 </body>
 </html>
