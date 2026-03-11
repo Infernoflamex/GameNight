@@ -77,9 +77,13 @@ img{image-rendering:auto!important;image-rendering:-webkit-optimize-contrast!imp
 
 /* FEED ITEMS (historique) */
 .fitem{background:var(--bg2);border:3px solid var(--border);box-shadow:3px 3px 0 #000;padding:0;margin-bottom:10px;display:flex;align-items:stretch;overflow:hidden}
-.fthumb{width:90px;flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:28px;border-right:3px solid var(--border);overflow:hidden;min-height:90px}
+.fthumb{width:20%;min-width:60px;max-width:120px;flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:28px;border-right:3px solid var(--border);overflow:hidden;min-height:90px}
 .fthumb img{width:100%;height:100%;object-fit:cover}
 .fbody{flex:1;padding:12px 14px;min-width:0}
+.fphoto-btn{font-family:'Press Start 2P',monospace;font-size:7px;padding:5px 10px;border:2px solid var(--border);background:var(--bg3);color:var(--muted);cursor:pointer;transition:.15s;white-space:nowrap;margin-top:8px}
+.fphoto-btn:hover{border-color:var(--yellow);color:var(--yellow)}
+.fphoto-btn.has-photos{border-color:var(--purple);color:var(--purple)}
+.fphoto-btn.has-photos:hover{border-color:var(--yellow);color:var(--yellow)}
 
 /* PHOTOS */
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-top:8px}
@@ -178,6 +182,26 @@ select option{background:var(--bg2)}
 .sfbtn{font-family:'Press Start 2P',monospace;font-size:7px;padding:6px 10px;border:2px solid var(--border);background:var(--bg3);color:var(--muted);cursor:pointer;transition:.1s}
 .sfbtn.on{border-color:var(--yellow);color:var(--yellow);background:var(--bg)}
 .sfbtn:hover:not(.on){color:var(--white);border-color:var(--white)}
+
+/* RANK TITLES */
+.rank-badge{display:inline-block;font-size:6px;padding:2px 6px;letter-spacing:1px;margin-top:3px;border-width:2px;border-style:solid}
+.rank-token{color:#a0a0a0;border-color:#a0a0a0;background:rgba(160,160,160,.08)}
+.rank-player{color:#4caf50;border-color:#4caf50;background:rgba(76,175,80,.1)}
+.rank-contender{color:#26c6da;border-color:#26c6da;background:rgba(38,198,218,.1)}
+.rank-planner{color:#5b8fff;border-color:#5b8fff;background:rgba(91,143,255,.1);box-shadow:0 0 6px rgba(91,143,255,.3)}
+.rank-tactician{color:#b57aff;border-color:#b57aff;background:rgba(181,122,255,.12);box-shadow:0 0 8px rgba(181,122,255,.35)}
+.rank-strategist{color:#ff5f87;border-color:#ff5f87;background:rgba(255,95,135,.12);box-shadow:0 0 10px rgba(255,95,135,.4);border-width:2px;border-style:dashed}
+.rank-mastermind{color:#ff9f43;border-color:#ff9f43;background:rgba(255,159,67,.12);box-shadow:0 0 12px rgba(255,159,67,.5);border-width:3px}
+.rank-champion{color:#f7c948;border-color:#f7c948;background:rgba(247,201,72,.15);box-shadow:0 0 14px rgba(247,201,72,.6),inset 0 0 8px rgba(247,201,72,.1);border-width:3px;text-shadow:0 0 8px rgba(247,201,72,.8)}
+.rank-legend{color:#3dffd0;border-color:#3dffd0;background:rgba(61,255,208,.1);box-shadow:0 0 16px rgba(61,255,208,.5),0 0 6px rgba(181,122,255,.4);border-width:3px;border-style:double;animation:legendpulse 2s ease-in-out infinite}
+.rank-god{background:linear-gradient(90deg,#f7c948,#ff5f87,#b57aff,#3dffd0,#f7c948);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;border:3px solid transparent;border-image:linear-gradient(90deg,#f7c948,#ff5f87,#b57aff,#3dffd0) 1;box-shadow:0 0 20px rgba(247,201,72,.5);animation:godpulse 1.5s ease-in-out infinite}
+@keyframes legendpulse{0%,100%{box-shadow:0 0 16px rgba(61,255,208,.5),0 0 6px rgba(181,122,255,.4)}50%{box-shadow:0 0 22px rgba(61,255,208,.8),0 0 12px rgba(181,122,255,.6)}}
+@keyframes godpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3)}}
+
+/* PLAYER CARD BG */
+.pcard-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.15;pointer-events:none;z-index:0}
+.card{position:relative;overflow:hidden}
+.card>*{position:relative;z-index:1}
 
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .25s ease}
@@ -324,7 +348,26 @@ select option{background:var(--bg2)}
     </div>
     <div id="pp-prev"></div>
   </div>
-  <div class="brow"><button class="bg" onclick="cm('pModal')">ANNULER</button><button class="bp" onclick="submitPlayer()">AJOUTER</button></div>
+  <div class="fg">
+    <label class="lbl">FOND DE CARTE <span style="color:var(--muted);font-size:7px">(optionnel)</span></label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <div>
+        <div class="lbl-small">COULEUR HEX</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="text" id="p-cardbg-color" placeholder="#b57aff" style="width:110px;font-size:8px"/>
+          <div id="p-cardbg-colorprev" style="width:28px;height:28px;border:2px solid var(--border)"></div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl-small">OU IMAGE</div>
+        <button class="sfbtn" onclick="document.getElementById('p-cardbg-file').click()" style="color:var(--green);border-color:var(--green)">📂 CHOISIR</button>
+        <input type="file" id="p-cardbg-file" accept="image/*" style="display:none"/>
+      </div>
+      <button class="sfbtn" id="p-cardbg-clear" onclick="clearCardBg()" style="color:var(--red);border-color:var(--red);display:none">✕ EFFACER</button>
+    </div>
+    <div id="p-cardbg-prev"></div>
+  </div>
+  <div class="brow"><button class="bg" onclick="cm('pModal')">ANNULER</button><button class="bp" id="pSubmitBtn" onclick="submitPlayer()">AJOUTER</button></div>
  </div>
 </div>
 
@@ -446,18 +489,6 @@ select option{background:var(--bg2)}
 
   <div class="sett-row">
     <div>
-      <div class="sett-label">ESPACEMENT</div>
-      <div class="sett-desc">Densité de l'affichage</div>
-    </div>
-    <div class="sett-ctrl">
-      <button class="sfbtn" data-sp="compact" onclick="setSpacing('compact')">SERRÉ</button>
-      <button class="sfbtn" data-sp="normal" onclick="setSpacing('normal')">NORMAL</button>
-      <button class="sfbtn" data-sp="airy" onclick="setSpacing('airy')">AÉRÉ</button>
-    </div>
-  </div>
-
-  <div class="sett-row">
-    <div>
       <div class="sett-label">IMAGE DE FOND</div>
       <div class="sett-desc">Visible uniquement sur cet appareil</div>
     </div>
@@ -567,13 +598,35 @@ function gg(id){return ag().find(g=>g.id===id)}
 const wr=(v,p)=>p>0?Math.round(v/p*100):0;
 const med=(i)=>MEDALS[i]||("#"+(i+1));
 function gt(pid){
-  return Object.values(stats[pid]||{}).reduce((a,s)=>({
+  const raw=Object.values(stats[pid]||{}).reduce((a,s)=>({
     parties:a.parties+s.parties,
     victoires:a.victoires+s.victoires,
     seconds:a.seconds+(s.seconds||0),
     troisiemes:a.troisiemes+(s.troisiemes||0),
     points:a.points+(s.points||0)
   }),{parties:0,victoires:0,seconds:0,troisiemes:0,points:0});
+  raw.points=Math.max(0,raw.points); // can't go below 0
+  return raw;
+}
+
+// Rank title system
+const RANKS=[
+  {min:0,   name:"Token",        cls:"rank-token"},
+  {min:10,  name:"Joueur",       cls:"rank-player"},
+  {min:20,  name:"Challenger",   cls:"rank-contender"},
+  {min:35,  name:"Stratège Jr.", cls:"rank-planner"},
+  {min:60,  name:"Tacticien",    cls:"rank-tactician"},
+  {min:100, name:"Stratège",     cls:"rank-strategist"},
+  {min:170, name:"Cerveau",      cls:"rank-mastermind"},
+  {min:290, name:"Champion",     cls:"rank-champion"},
+  {min:500, name:"Légende",      cls:"rank-legend"},
+  {min:850, name:"Tabletop God", cls:"rank-god"},
+  {min:1450,name:"Tabletop God ★",cls:"rank-god"},
+];
+function getRank(pts){
+  let r=RANKS[0];
+  for(const rk of RANKS){if(pts>=rk.min)r=rk;else break;}
+  return r;
 }
 function fd(d){if(!d)return"—";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"2-digit"})}
 
@@ -599,10 +652,13 @@ function rbs(){
     const rnk=getRankings(f);
     const allPids=f.playerIds||[];
     const scores=f.scores||{};
+    const rankedSet=new Set(rnk.flatMap(r=>r.pids));
     allPids.forEach(pid=>{
       if(!stats[pid])stats[pid]={};
       if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0,scoreSum:0,scoreCount:0,scoreMax:null,scoreMin:null};
       stats[pid][f.gameId].parties++;
+      // Losers (not ranked at all) get -1 pt
+      if(!rankedSet.has(pid)) stats[pid][f.gameId].points=(stats[pid][f.gameId].points||0)-1;
       // Track game scores
       if(scores[pid]!==undefined){
         const sc=parseFloat(scores[pid]);
@@ -730,14 +786,14 @@ function buildFacts(){
 let feedInterval=null;
 function startFeed(){
   if(feedInterval)clearInterval(feedInterval);
-  feedFacts=buildFacts();feedIdx=0;
+  feedFacts=buildFacts().slice(0,10);feedIdx=0;
   renderFeedBlock();
   if(feedFacts.length>1) feedInterval=setInterval(()=>{
     const el=document.getElementById("feed-block");
     if(!el)return clearInterval(feedInterval);
     el.classList.add("fade");
-    setTimeout(()=>{feedIdx=(feedIdx+1)%feedFacts.length;renderFeedBlock();el.classList.remove("fade");},400);
-  },4000);
+    setTimeout(()=>{feedIdx=(feedIdx+1)%feedFacts.length;renderFeedBlock();el.classList.remove("fade");},500);
+  },7000);
 }
 function renderFeedBlock(){
   const el=document.getElementById("feed-block");
@@ -783,18 +839,25 @@ function rAccueil(){
       <div class="hptitle" style="color:var(--yellow)">🏆 TOP JOUEURS</div>
       ${lb2.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUN JOUEUR</div>`:
       lb2.slice(0,5).map((p,i)=>{
+        const rk=getRank(p.points||0);
         const av=p.photo?`<div class="av" style="width:30px;height:30px;border-color:${p.color}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:30px;height:30px;background:${p.color};color:#000;font-size:9px">${p.name[0]}</div>`;
-        return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+        return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:14px;width:22px">${med(i)}</span>${av}
-          <span style="font-size:8px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${p.name}</span>
-          <span style="font-size:8px;color:var(--yellow)">${p.victoires}🏆</span>
+          <div style="flex:1;min-width:0;overflow:hidden">
+            <div style="font-size:8px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${p.name}</div>
+            <div class="rank-badge ${rk.cls}">${rk.name}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:8px;color:var(--yellow)">${p.victoires}🏆</div>
+            <div style="font-size:7px;color:var(--cyan)">⭐${p.points||0}</div>
+          </div>
         </div>`;
       }).join("")}
     </div>
     <div class="hpanel px-p">
       <div class="hptitle" style="color:var(--pink)">🕹️ DERNIÈRES PARTIES</div>
       ${recent.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUNE PARTIE</div>`:
-      recent.map(f=>{
+      recent.slice(0,5).map(f=>{
         const game=gg(f.gameId);const wid=getWinner(f);const winner=players.find(p=>p.id===wid);
         return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:16px">${game?.emoji||"🎲"}</span>
@@ -1002,17 +1065,30 @@ function rHisto(){
             <div style="font-size:9px;margin-bottom:3px;line-height:1.5">${game?.name||f.gameId}</div>
             <div style="font-size:7px;color:var(--muted);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">${fd(f.date)}</div>
             ${rankHtml}
-            ${pho.length?`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(70px,1fr));margin-top:10px">${pho.map(ph=>`<img class="pt" src="${ph}" onclick="lb('${ph}')" loading="lazy"/>`).join("")}</div>`:""}
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0">
             <button class="ebtn" onclick="openEM('${f.id}')" title="Modifier">✏️</button>
             <button class="dbtn" onclick="delMatch('${f.id}')" title="Supprimer">✕</button>
+            <button class="fphoto-btn${pho.length?' has-photos':''}" onclick="toggleMatchPhotos(this,'${f.id}')" title="${pho.length?'Revoir la Partie':'Pas d\'image'}">${pho.length?"📸":"🚫"}</button>
           </div>
+        </div>
+        <div id="mphotos-${f.id}" style="display:none;margin-top:10px">
+          ${pho.length?`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(70px,1fr))">${pho.map(ph=>`<img class="pt" src="${ph}" onclick="lb('${ph}')" loading="lazy"/>`).join("")}</div>`:`<div style="font-size:7px;color:var(--muted);padding:8px 0">PAS DE PHOTOS POUR CETTE PARTIE.</div>`}
         </div>
       </div>
     </div>`;
   });
   document.getElementById("pg-historique").innerHTML=h;
+}
+
+function toggleMatchPhotos(btn,fid){
+  const div=document.getElementById("mphotos-"+fid);
+  if(!div)return;
+  const open=div.style.display==="none";
+  div.style.display=open?"block":"none";
+  const f=feed.find(x=>x.id===fid);
+  const hasPho=f&&(f.photos||[]).length>0;
+  btn.textContent=open?(hasPho?"📸 ▲":"🚫 ▲"):(hasPho?"📸":"🚫");
 }
 
 // ── JOUEURS ───────────────────────────────────────────────────────────────────
@@ -1024,25 +1100,32 @@ function rJoueurs(){
   if(!players.length){h+=`<div class="empty">AUCUN JOUEUR ENCORE.</div>`;}
   players.forEach((p,i)=>{
     const tot=gt(p.id);const ac=p.color||COLS[i%COLS.length];
+    const rk=getRank(tot.points||0);
     const best=ag().map(g=>({...g,v:stats[p.id]?.[g.id]?.victoires||0})).filter(g=>g.v>0).sort((a,b)=>b.v-a.v)[0];
     const av=p.photo?`<div class="av" style="width:72px;height:72px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:72px;height:72px;background:${ac};color:#000;font-size:24px">${p.name[0]}</div>`;
-    h+=`<div class="card ac${i%7}">
-      <div style="display:flex;align-items:center;gap:14px">
+    // Card background
+    let bgStyle="";
+    if(p.cardBgImg){bgStyle=`background-image:url(${p.cardBgImg});background-size:cover;background-position:center;`;}
+    else if(p.cardBgColor){bgStyle=`background-color:${p.cardBgColor};`;}
+    h+=`<div class="card ac${i%7}" style="${bgStyle}opacity:1">
+      ${bgStyle?`<div style="position:absolute;inset:0;background:rgba(13,13,26,.75);z-index:0"></div>`:""}
+      <div style="position:relative;z-index:1;display:flex;align-items:center;gap:14px">
         ${av}
         <div style="flex:1">
-          <div style="font-size:12px;margin-bottom:6px">${p.name}</div>
-          ${best?`<div style="font-size:7px;color:var(--muted)">TOP: ${best.emoji} ${best.name} (${best.v}🏆)</div>`:""}
+          <div style="font-size:12px;margin-bottom:4px">${p.name}</div>
+          <div class="rank-badge ${rk.cls}" style="display:inline-block">${rk.name}</div>
+          ${best?`<div style="font-size:7px;color:var(--muted);margin-top:5px">TOP: ${best.emoji} ${best.name} (${best.v}🏆)</div>`:""}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="ebtn" onclick="openEP('${p.id}')">✏️</button>
           <button class="dbtn" style="font-size:16px" onclick="delPlayer('${p.id}')">🗑️</button>
         </div>
       </div>
-      <div class="srow">
+      <div class="srow" style="position:relative;z-index:1">
         <div style="text-align:center;min-width:54px"><div class="sv">${tot.parties}</div><div class="sl">PARTIES</div></div>
         <div style="text-align:center;min-width:54px"><div class="sv">${tot.victoires}</div><div class="sl">VICTOIRES</div></div>
         <div style="text-align:center;min-width:54px"><div class="sv">${tot.seconds||0}</div><div class="sl">2ÈMES</div></div>
-        <div style="text-align:center;min-width:54px"><div class="sv">${wr(tot.victoires,tot.parties)}%</div><div class="sl">WIN RATE</div></div>
+        <div style="text-align:center;min-width:54px"><div class="sv" style="color:var(--cyan)">⭐${tot.points||0}</div><div class="sl">POINTS</div></div>
       </div>
     </div>`;
   });
@@ -1231,11 +1314,25 @@ function delMatch(id){
 }
 
 // ── PLAYER MODAL ──────────────────────────────────────────────────────────────
+let pCardBgImg=null, pCardBgColor=null;
+
+function clearCardBg(){
+  pCardBgImg=null; pCardBgColor=null;
+  document.getElementById("p-cardbg-prev").innerHTML="";
+  document.getElementById("p-cardbg-colorprev").style.background="";
+  document.getElementById("p-cardbg-color").value="";
+  document.getElementById("p-cardbg-clear").style.display="none";
+}
 function openPM(){
-  epId=null;ppho=null;
+  epId=null;ppho=null;pCardBgImg=null;pCardBgColor=null;
   document.getElementById("p-name").value="";
   document.getElementById("pp-prev").innerHTML="";
+  document.getElementById("p-cardbg-prev").innerHTML="";
+  document.getElementById("p-cardbg-color").value="";
+  document.getElementById("p-cardbg-colorprev").style.background="";
+  document.getElementById("p-cardbg-clear").style.display="none";
   document.getElementById("pModalTitle").textContent="👾 AJOUTER JOUEUR";
+  document.getElementById("pSubmitBtn").textContent="AJOUTER";
   selCol=COLS[players.length%COLS.length];bCols();
   document.getElementById("pModal").style.display="flex";
   setTimeout(()=>document.getElementById("p-name").focus(),100);
@@ -1244,18 +1341,54 @@ function openPM(){
     ppho=await compress(this.files[0],600,0.92);
     document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;
   };
+  document.getElementById("p-cardbg-file").onchange=async function(){
+    if(!this.files[0])return;
+    pCardBgImg=await compress(this.files[0],1080,0.85);
+    pCardBgColor=null;
+    document.getElementById("p-cardbg-color").value="";
+    document.getElementById("p-cardbg-colorprev").style.background="";
+    document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;
+    document.getElementById("p-cardbg-clear").style.display="inline-block";
+    this.value="";
+  };
+  document.getElementById("p-cardbg-color").oninput=function(){
+    const v=this.value.trim();
+    document.getElementById("p-cardbg-colorprev").style.background=v||"";
+    if(v){pCardBgColor=v;pCardBgImg=null;document.getElementById("p-cardbg-prev").innerHTML="";document.getElementById("p-cardbg-clear").style.display="inline-block";}
+  };
 }
 function openEP(id){
   epId=id;const p=players.find(x=>x.id===id);if(!p)return;
   document.getElementById("p-name").value=p.name;ppho=p.photo||null;
+  pCardBgImg=p.cardBgImg||null; pCardBgColor=p.cardBgColor||null;
   document.getElementById("pp-prev").innerHTML=ppho?`<img class="prev" src="${ppho}"/>`:"";
+  document.getElementById("p-cardbg-color").value=pCardBgColor||"";
+  document.getElementById("p-cardbg-colorprev").style.background=pCardBgColor||"";
+  document.getElementById("p-cardbg-prev").innerHTML=pCardBgImg?`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`:"";
+  document.getElementById("p-cardbg-clear").style.display=(pCardBgImg||pCardBgColor)?"inline-block":"none";
   document.getElementById("pModalTitle").textContent="✏️ MODIFIER JOUEUR";
+  document.getElementById("pSubmitBtn").textContent="ENREGISTRER ✓";
   selCol=p.color||COLS[0];bCols();
   document.getElementById("pModal").style.display="flex";
   document.getElementById("pp").onchange=async function(){
     if(!this.files[0])return;
     ppho=await compress(this.files[0],600,0.92);
     document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;
+  };
+  document.getElementById("p-cardbg-file").onchange=async function(){
+    if(!this.files[0])return;
+    pCardBgImg=await compress(this.files[0],1080,0.85);
+    pCardBgColor=null;
+    document.getElementById("p-cardbg-color").value="";
+    document.getElementById("p-cardbg-colorprev").style.background="";
+    document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;
+    document.getElementById("p-cardbg-clear").style.display="inline-block";
+    this.value="";
+  };
+  document.getElementById("p-cardbg-color").oninput=function(){
+    const v=this.value.trim();
+    document.getElementById("p-cardbg-colorprev").style.background=v||"";
+    if(v){pCardBgColor=v;pCardBgImg=null;document.getElementById("p-cardbg-prev").innerHTML="";document.getElementById("p-cardbg-clear").style.display="inline-block";}
   };
 }
 function bCols(){
@@ -1268,8 +1401,12 @@ function bCols(){
 }
 function submitPlayer(){
   const name=document.getElementById("p-name").value.trim().toUpperCase();if(!name)return;
-  if(epId){const p=players.find(x=>x.id===epId);if(p){p.name=name;p.color=selCol;if(ppho)p.photo=ppho}}
-  else players.push({id:Date.now().toString(),name,color:selCol,photo:ppho||null});
+  if(epId){
+    const p=players.find(x=>x.id===epId);
+    if(p){p.name=name;p.color=selCol;if(ppho)p.photo=ppho;p.cardBgImg=pCardBgImg||null;p.cardBgColor=pCardBgColor||null;}
+  } else {
+    players.push({id:Date.now().toString(),name,color:selCol,photo:ppho||null,cardBgImg:pCardBgImg||null,cardBgColor:pCardBgColor||null});
+  }
   sv();cm("pModal");rAll();
 }
 function delPlayer(id){
@@ -1568,7 +1705,7 @@ function submitEG(){
 
 // ── SETTINGS (local — localStorage only) ──────────────────────────────────────
 const SETT_KEY="gn_settings";
-let localSettings={fontSize:"normal",spacing:"normal",bgImage:null,bgOpacity:20};
+let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20};
 
 function loadSettings(){
   try{const s=localStorage.getItem(SETT_KEY);if(s)localSettings={...localSettings,...JSON.parse(s)};}catch(e){}
@@ -1579,13 +1716,11 @@ function saveSettings(){
   applySettings();
 }
 function applySettings(){
-  // Font size — scale the content area
-  const fsScales={small:0.82,normal:1,large:1.18};
-  const scale=fsScales[localSettings.fontSize]||1;
+  // Font size — normal = 120%, small = 100%, large = 140%
+  const fsScales={small:1.0,normal:1.2,large:1.4};
+  const scale=fsScales[localSettings.fontSize]||1.2;
   document.getElementById("cnt").style.transform=`scale(${scale})`;
-  // Spacing
-  const spPad={compact:"12px",normal:"20px",airy:"32px"};
-  document.getElementById("cnt").style.padding=spPad[localSettings.spacing]||"20px";
+  document.getElementById("cnt").style.transformOrigin="top center";
   // Background image
   const bgLayer=document.getElementById("bg-layer");
   if(bgLayer){
@@ -1599,9 +1734,7 @@ function applySettings(){
   }
 }
 function openSettings(){
-  // Sync controls to current settings
   document.querySelectorAll("[data-fs]").forEach(b=>b.classList.toggle("on",b.dataset.fs===localSettings.fontSize));
-  document.querySelectorAll("[data-sp]").forEach(b=>b.classList.toggle("on",b.dataset.sp===localSettings.spacing));
   const oSlider=document.getElementById("bg-opacity");
   oSlider.value=localSettings.bgOpacity||20;
   document.getElementById("bg-opacity-val").textContent=(localSettings.bgOpacity||20)+"%";
@@ -1612,7 +1745,6 @@ function openSettings(){
     `<div style="font-size:7px;color:var(--muted);padding:8px 0">AUCUNE IMAGE DE FOND</div>`;
   document.getElementById("bg-file").onchange=async function(){
     if(!this.files[0])return;
-    // Compress bg image to reasonable size
     localSettings.bgImage=await compress(this.files[0],1920,0.85);
     localSettings.bgOpacity=localSettings.bgOpacity||20;
     saveSettings();
@@ -1626,10 +1758,6 @@ function setFontSize(s){
   localSettings.fontSize=s;saveSettings();
   document.querySelectorAll("[data-fs]").forEach(b=>b.classList.toggle("on",b.dataset.fs===s));
 }
-function setSpacing(s){
-  localSettings.spacing=s;saveSettings();
-  document.querySelectorAll("[data-sp]").forEach(b=>b.classList.toggle("on",b.dataset.sp===s));
-}
 function setBgOpacity(v){
   localSettings.bgOpacity=parseInt(v);
   document.getElementById("bg-opacity-val").textContent=v+"%";
@@ -1641,7 +1769,7 @@ function removeBg(){
   document.getElementById("bg-preview").innerHTML=`<div style="font-size:7px;color:var(--muted);padding:8px 0">AUCUNE IMAGE DE FOND</div>`;
 }
 function resetSettings(){
-  localSettings={fontSize:"normal",spacing:"normal",bgImage:null,bgOpacity:20};
+  localSettings={fontSize:"normal",bgImage:null,bgOpacity:20};
   saveSettings();openSettings();
 }
 
