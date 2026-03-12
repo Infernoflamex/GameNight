@@ -186,7 +186,11 @@ select option{background:var(--bg2)}
 .sfbtn.on{border-color:var(--yellow);color:var(--yellow);background:var(--bg)}
 .sfbtn:hover:not(.on){color:var(--white);border-color:var(--white)}
 
-/* RANK TITLES */
+/* STATS LAYOUT */
+.stats-layout{display:grid;grid-template-columns:1fr 240px;gap:14px;align-items:start}
+@media(max-width:680px){.stats-layout{grid-template-columns:1fr}}
+
+
 .rank-badge{display:inline-block;font-size:6px;padding:2px 6px;letter-spacing:1px;margin-top:3px;border-width:2px;border-style:solid}
 .rank-token{color:#a0a0a0;border-color:#a0a0a0;background:rgba(160,160,160,.08)}
 .rank-player{color:#4caf50;border-color:#4caf50;background:rgba(76,175,80,.1)}
@@ -1822,52 +1826,114 @@ function resetSettings(){
 }
 
 // ── STATS TAB ─────────────────────────────────────────────────────────────────
-let stSelPlayers=[], stSelGame="all", stVsOnly=false;
+const ST_COLORS=['#3dffd0','#ff5f87','#f7c948','#b57aff','#5b8fff','#3dff9a','#ff4757','#00d2d3','#c56ef3','#ffd32a'];
+let stSelPlayers=[],stSelGame="all",stVsOnly=false,stMetric="points";
+let stShowLabels=false,stPlayersExpanded=false,stGamesExpanded=false;
+let stChartData=null,stHoverRAF=null;
 
 function rStats(){
-  // Initialize selection defaults on first load
-  if(!stSelPlayers.length && players.length) stSelPlayers=[players[0].id];
+  if(!stSelPlayers.length&&players.length){
+    const recentPids=new Set();
+    feed.slice(0,20).forEach(f=>(f.playerIds||[]).forEach(id=>recentPids.add(id)));
+    stSelPlayers=players.filter(p=>recentPids.has(p.id)).slice(0,3).map(p=>p.id);
+    if(!stSelPlayers.length)stSelPlayers=players.slice(0,3).map(p=>p.id);
+  }
 
-  let h=`<div class="stitle">📊 STATISTIQUES</div>`;
+  // ── RECENT DEFAULTS ──
+  const recentPids=new Set();feed.slice(0,20).forEach(f=>(f.playerIds||[]).forEach(id=>recentPids.add(id)));
+  const recentGameIds=[];const seenG=new Set();
+  feed.forEach(f=>{if(!seenG.has(f.gameId)){seenG.add(f.gameId);recentGameIds.push(f.gameId);}});
+  const shownPlayers=stPlayersExpanded?players:players.filter(p=>recentPids.has(p.id)).slice(0,3);
+  const allPlayedGames=ag().filter(g=>feed.some(f=>f.gameId===g.id));
+  const shownGames=stGamesExpanded?allPlayedGames:allPlayedGames.filter(g=>recentGameIds.slice(0,4).includes(g.id));
 
-  // ── FILTERS ──────────────────────────────────────────────────────────────────
-  h+=`<div style="background:var(--bg2);border:3px solid var(--border);padding:14px;margin-bottom:14px">
+  // ── METRIC LABEL ──
+  const metricLabels={points:"⭐ POINTS CUMULÉS",victoires:"🏆 VICTOIRES CUMULÉES",parties:"🎮 PARTIES JOUÉES"};
 
-    <div style="font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px">JOUEURS À COMPARER</div>
-    <div id="st-players" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">`;
-  players.forEach(p=>{
-    const sel=stSelPlayers.includes(p.id);
-    h+=`<button class="chip${sel?" sel":""}" style="${sel?"border-color:"+p.color+";color:"+p.color:""}background:var(--bg3)" onclick="stTogglePlayer('${p.id}')">
-      <span class="dot" style="background:${p.color}"></span>${p.name}
-    </button>`;
-  });
-  h+=`</div>
+  // ── BUILD HTML ──
+  const h=`<div class="stitle">📊 STATISTIQUES</div>
+  <div class="stats-layout">
 
-    <div style="font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px">FILTRER PAR JEU</div>
-    <div id="st-games" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-      <button class="chip${stSelGame==="all"?" sel":""}" onclick="stSetGame('all')">TOUS LES JEUX</button>`;
-  ag().filter(g=>feed.some(f=>f.gameId===g.id)).forEach(g=>{
-    h+=`<button class="chip${stSelGame===g.id?" sel":""}" onclick="stSetGame('${g.id}')">${g.emoji} ${g.name}</button>`;
-  });
-  h+=`</div>
-
-    <div style="display:flex;align-items:center;gap:12px">
-      <div id="st-vs-toggle" onclick="stToggleVs()" style="width:36px;height:20px;background:var(--bg3);border:2px solid ${stVsOnly?"var(--cyan)":"var(--border)"};cursor:pointer;position:relative;flex-shrink:0">
-        <div style="position:absolute;top:2px;left:${stVsOnly?"20":"2"}px;width:12px;height:12px;background:${stVsOnly?"var(--cyan)":"var(--muted)"};transition:.15s"></div>
+    <!-- LEFT: CHART -->
+    <div>
+      <!-- Metric selector -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="sfbtn${stMetric==="points"?" on":""}" onclick="stSetMetric('points')">⭐ POINTS</button>
+        <button class="sfbtn${stMetric==="victoires"?" on":""}" onclick="stSetMetric('victoires')">🏆 VICTOIRES</button>
+        <button class="sfbtn${stMetric==="parties"?" on":""}" onclick="stSetMetric('parties')">🎮 PARTIES</button>
+        <button class="sfbtn${stShowLabels?" on":""}" onclick="stToggleLabels()" style="margin-left:auto;${stShowLabels?"border-color:var(--yellow);color:var(--yellow)":""}">🏷 NOMS</button>
       </div>
-      <div>
-        <div style="font-size:8px">Parties communes uniquement</div>
-        <div style="font-size:7px;color:var(--muted);margin-top:2px">Seulement les parties où tous les joueurs sélectionnés jouent ensemble</div>
+
+      <!-- Chart box -->
+      <div style="background:var(--bg2);border:3px solid var(--border);padding:14px;position:relative">
+        <div style="font-size:8px;color:var(--cyan);letter-spacing:1px;margin-bottom:12px">${metricLabels[stMetric]||""}</div>
+        <div style="position:relative">
+          <canvas id="st-canvas" style="width:100%;display:block;cursor:crosshair"></canvas>
+          <div id="st-tooltip" style="display:none;position:absolute;pointer-events:none;background:rgba(13,13,26,.95);border:2px solid var(--border);padding:8px 10px;font-size:7px;line-height:2;white-space:nowrap;z-index:10"></div>
+        </div>
+        <div id="st-empty" style="display:none;text-align:center;padding:60px 0;font-size:8px;color:var(--muted)">AUCUNE DONNÉE<br><span style="font-size:7px;margin-top:8px;display:block;color:var(--border)">Sélectionnez des joueurs →</span></div>
+      </div>
+
+      <!-- Common games toggle -->
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px;background:var(--bg2);border:2px solid var(--border)">
+        <div onclick="stToggleVs()" style="width:36px;height:20px;background:var(--bg3);border:2px solid ${stVsOnly?"var(--cyan)":"var(--border)"};cursor:pointer;position:relative;flex-shrink:0">
+          <div style="position:absolute;top:2px;left:${stVsOnly?"20":"2"}px;width:12px;height:12px;background:${stVsOnly?"var(--cyan)":"var(--muted)"};transition:.15s"></div>
+        </div>
+        <div>
+          <div style="font-size:7px">Parties communes uniquement</div>
+          <div style="font-size:6px;color:var(--muted);margin-top:3px">Seulement où tous jouent ensemble</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- GRAPH AREA -->
-  <div style="background:var(--bg2);border:3px solid var(--border);padding:14px;margin-bottom:14px">
-    <div style="font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:12px">⭐ ÉVOLUTION DES POINTS CUMULÉS</div>
-    <canvas id="st-canvas" style="width:100%;display:block"></canvas>
-    <div id="st-legend" style="display:flex;flex-wrap:wrap;gap:14px;margin-top:12px"></div>
-    <div id="st-empty" style="display:none;text-align:center;padding:40px 0;font-size:8px;color:var(--muted)">AUCUNE DONNÉE POUR CES FILTRES.</div>
+    <!-- RIGHT: PANELS -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <!-- PLAYERS PANEL -->
+      <div style="background:var(--bg2);border:3px solid var(--border);padding:12px">
+        <div style="font-size:7px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          JOUEURS
+          <button class="sfbtn" onclick="stExpandPlayers()" style="font-size:6px;padding:3px 6px">${stPlayersExpanded?"▲ RÉDUIRE":"🔍 TOUS"}</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${shownPlayers.map((p,idx)=>{
+            const sel=stSelPlayers.includes(p.id);
+            const ci=stSelPlayers.indexOf(p.id);
+            const lineColor=ci>=0?ST_COLORS[ci%ST_COLORS.length]:"var(--border)";
+            const av=p.photo?`<div class="av" style="width:32px;height:32px;border-color:${sel?lineColor:p.color};flex-shrink:0"><img src="${p.photo}"/></div>`:`<div class="av" style="width:32px;height:32px;background:${p.color};color:#000;font-size:11px;flex-shrink:0">${p.name[0]}</div>`;
+            return`<div onclick="stTogglePlayer('${p.id}')" style="display:flex;align-items:center;gap:8px;padding:7px 8px;cursor:pointer;background:${sel?"rgba(255,255,255,.05)":"var(--bg3)"};border:2px solid ${sel?lineColor:"var(--border)"};transition:.1s">
+              ${av}
+              <span style="font-size:7px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${sel?"color:"+lineColor:""}">${p.name}</span>
+              ${sel?`<div style="width:18px;height:3px;background:${lineColor};box-shadow:0 0 6px ${lineColor};flex-shrink:0"></div>`:""}
+            </div>`;
+          }).join("")}
+          ${!stPlayersExpanded&&players.length>shownPlayers.length?`<div style="font-size:7px;color:var(--muted);text-align:center;padding:4px">+${players.length-shownPlayers.length} autres → 🔍</div>`:""}
+        </div>
+      </div>
+
+      <!-- GAMES PANEL -->
+      <div style="background:var(--bg2);border:3px solid var(--border);padding:12px">
+        <div style="font-size:7px;color:var(--pink);letter-spacing:2px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          JEU FILTRÉ
+          <button class="sfbtn" onclick="stExpandGames()" style="font-size:6px;padding:3px 6px">${stGamesExpanded?"▲ RÉDUIRE":"🔍 TOUS"}</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div onclick="stSetGame('all')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;background:${stSelGame==="all"?"rgba(255,255,255,.05)":"var(--bg3)"};border:2px solid ${stSelGame==="all"?"var(--yellow)":"var(--border)"}">
+            <span style="font-size:14px">🎲</span>
+            <span style="font-size:7px;${stSelGame==="all"?"color:var(--yellow)":""}">TOUS LES JEUX</span>
+          </div>
+          ${shownGames.map(g=>{
+            const sel=stSelGame===g.id;
+            const gimg=g.img?`<img src="${g.img}" style="width:32px;height:32px;object-fit:cover;flex-shrink:0;border:1px solid var(--border)"/>`:`<span style="font-size:18px;width:32px;text-align:center;flex-shrink:0">${g.emoji}</span>`;
+            return`<div onclick="stSetGame('${g.id}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;background:${sel?"rgba(255,255,255,.05)":"var(--bg3)"};border:2px solid ${sel?"var(--yellow)":"var(--border)"}">
+              ${gimg}
+              <span style="font-size:7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${sel?"color:var(--yellow)":""}">${g.name}</span>
+            </div>`;
+          }).join("")}
+          ${!stGamesExpanded&&allPlayedGames.length>shownGames.length?`<div style="font-size:7px;color:var(--muted);text-align:center;padding:4px">+${allPlayedGames.length-shownGames.length} jeux → 🔍</div>`:""}
+        </div>
+      </div>
+    </div>
   </div>`;
 
   document.getElementById("pg-stats").innerHTML=h;
@@ -1875,192 +1941,196 @@ function rStats(){
 }
 
 function stTogglePlayer(id){
-  if(stSelPlayers.includes(id)){
-    if(stSelPlayers.length>1)stSelPlayers=stSelPlayers.filter(x=>x!==id);
-  } else {
-    stSelPlayers.push(id);
-  }
+  if(stSelPlayers.includes(id)){if(stSelPlayers.length>1)stSelPlayers=stSelPlayers.filter(x=>x!==id);}
+  else stSelPlayers.push(id);
   rStats();
 }
 function stSetGame(id){stSelGame=id;rStats();}
 function stToggleVs(){stVsOnly=!stVsOnly;rStats();}
+function stSetMetric(m){stMetric=m;rStats();}
+function stToggleLabels(){stShowLabels=!stShowLabels;drawStatsChart();}
+function stExpandPlayers(){stPlayersExpanded=!stPlayersExpanded;rStats();}
+function stExpandGames(){stGamesExpanded=!stGamesExpanded;rStats();}
 
 function drawStatsChart(){
   const canvas=document.getElementById("st-canvas");
-  const legend=document.getElementById("st-legend");
   const emptyMsg=document.getElementById("st-empty");
   if(!canvas)return;
 
-  // Build data series per player
-  // Get relevant feed entries, sorted oldest→newest
+  // Build entries
   let entries=[...feed].sort((a,b)=>new Date(a.date)-new Date(b.date)||(a.id>b.id?1:-1));
-
-  // Filter by game
-  if(stSelGame!=="all") entries=entries.filter(f=>f.gameId===stSelGame);
-
-  // Filter: only entries where all selected players participate (if vsOnly)
-  if(stVsOnly && stSelPlayers.length>1){
+  if(stSelGame!=="all")entries=entries.filter(f=>f.gameId===stSelGame);
+  if(stVsOnly&&stSelPlayers.length>1)
     entries=entries.filter(f=>stSelPlayers.every(pid=>(f.playerIds||[]).includes(pid)));
-  } else {
-    // Show only entries where at least one selected player participated
+  else
     entries=entries.filter(f=>stSelPlayers.some(pid=>(f.playerIds||[]).includes(pid)));
-  }
 
   if(!entries.length){
-    canvas.style.display="none";
-    emptyMsg.style.display="block";
-    legend.innerHTML="";
-    return;
+    canvas.style.display="none";emptyMsg.style.display="block";stChartData=null;return;
   }
-  canvas.style.display="block";
-  emptyMsg.style.display="none";
+  canvas.style.display="block";emptyMsg.style.display="none";
 
-  // Build cumulative points series per player
-  const series={};
-  stSelPlayers.forEach(pid=>{
+  // Build series
+  const seriesList=stSelPlayers.map((pid,idx)=>{
     const p=players.find(x=>x.id===pid);
-    series[pid]={name:p?.name||pid,color:p?.color||"#fff",points:[0],labels:["0"]};
+    const color=ST_COLORS[idx%ST_COLORS.length];
+    const vals=[0];const dates=["START"];
     let cum=0;
-    entries.forEach((f,i)=>{
-      if(!(f.playerIds||[]).includes(pid)){
-        // Player didn't participate — carry forward
-        series[pid].points.push(cum);
-        series[pid].labels.push(fd(f.date));
-        return;
+    entries.forEach(f=>{
+      const played=(f.playerIds||[]).includes(pid);
+      if(!played){vals.push(cum);dates.push(fd(f.date));return;}
+      if(stMetric==="parties"){cum++;vals.push(cum);dates.push(fd(f.date));return;}
+      if(stMetric==="victoires"){
+        const rnk=getRankings(f);
+        if(rnk.find(r=>r.place===1&&r.pids.includes(pid)))cum++;
+        vals.push(cum);dates.push(fd(f.date));return;
       }
-      // Compute points earned in this match
+      // points
       const rnk=getRankings(f);
       const rankedSet=new Set(rnk.flatMap(r=>r.pids));
-      if(!rankedSet.has(pid)){
-        // Lost: -1 but floor at 0
-        cum=Math.max(0,cum-1);
-      } else {
-        const r=rnk.find(r=>r.pids.includes(pid));
-        const pts=r?r.place===1?3:r.place===2?2:r.place===3?1:0:0;
-        cum=Math.max(0,cum+pts);
-      }
-      series[pid].points.push(cum);
-      series[pid].labels.push(fd(f.date));
+      if(!rankedSet.has(pid)){cum=Math.max(0,cum-1);}
+      else{const r=rnk.find(r=>r.pids.includes(pid));cum+=r?r.place===1?3:r.place===2?2:r.place===3?1:0:0;}
+      cum=Math.max(0,cum);
+      vals.push(cum);dates.push(fd(f.date));
     });
+    return{pid,name:p?.name||pid,color,vals,dates};
   });
 
-  // Determine X axis labels (up to 10 ticks)
-  const numPoints=entries.length+1; // +1 for start
-  const step=Math.max(1,Math.ceil((numPoints-1)/10));
+  // X/Y scale
+  const numPts=entries.length+1;
+  const step=Math.max(1,Math.ceil((numPts-1)/10));
   const xTicks=[];
-  for(let i=0;i<numPoints;i+=step) xTicks.push(i);
-  if(!xTicks.includes(numPoints-1)) xTicks.push(numPoints-1);
+  for(let i=0;i<numPts;i+=step)xTicks.push(i);
+  if(!xTicks.includes(numPts-1))xTicks.push(numPts-1);
 
-  // Compute max Y
   let maxY=0;
-  Object.values(series).forEach(s=>s.points.forEach(v=>{ if(v>maxY)maxY=v; }));
+  seriesList.forEach(s=>s.vals.forEach(v=>{if(v>maxY)maxY=v;}));
   maxY=Math.max(maxY,5);
-  // Nice Y scale: round up to a multiple of a nice number
   const yStep=maxY<=10?1:maxY<=30?5:maxY<=100?10:maxY<=300?25:50;
   const yMax=Math.ceil(maxY/yStep)*yStep;
-  const yTicks=[];
-  for(let y=0;y<=yMax;y+=yStep) yTicks.push(y);
+  const yTicks=[];for(let y=0;y<=yMax;y+=yStep)yTicks.push(y);
 
-  // Draw on canvas
+  // Canvas setup
   const dpr=window.devicePixelRatio||1;
-  const cssW=canvas.parentElement.clientWidth-28; // padding subtracted
-  const cssH=Math.max(200,Math.round(cssW*0.45));
-  canvas.width=cssW*dpr;
-  canvas.height=cssH*dpr;
-  canvas.style.width=cssW+"px";
-  canvas.style.height=cssH+"px";
-  const ctx=canvas.getContext("2d");
-  ctx.scale(dpr,dpr);
+  const cssW=canvas.parentElement.clientWidth-2;
+  const cssH=Math.max(220,Math.round(cssW*0.5));
+  canvas.width=cssW*dpr;canvas.height=cssH*dpr;
+  canvas.style.width=cssW+"px";canvas.style.height=cssH+"px";
+  const ctx=canvas.getContext("2d");ctx.scale(dpr,dpr);
 
-  const PAD={top:20,right:20,bottom:50,left:44};
-  const W=cssW-PAD.left-PAD.right;
-  const H=cssH-PAD.top-PAD.bottom;
+  const PAD={top:24,right:stShowLabels?80:20,bottom:44,left:40};
+  const W=cssW-PAD.left-PAD.right;const H=cssH-PAD.top-PAD.bottom;
+
+  const cx=(i)=>PAD.left+(i/(numPts-1||1))*W;
+  const cy=(v)=>PAD.top+H-(v/yMax)*H;
 
   // Background
-  ctx.fillStyle="#0d0d1a";
-  ctx.fillRect(0,0,cssW,cssH);
+  ctx.fillStyle="#0d0d1a";ctx.fillRect(0,0,cssW,cssH);
 
-  // Grid lines
-  ctx.strokeStyle="rgba(255,255,255,.07)";
-  ctx.lineWidth=1;
-  yTicks.forEach(y=>{
-    const cy=PAD.top+H-(y/yMax)*H;
-    ctx.beginPath();ctx.moveTo(PAD.left,cy);ctx.lineTo(PAD.left+W,cy);ctx.stroke();
-  });
+  // Grid
+  ctx.strokeStyle="rgba(255,255,255,.06)";ctx.lineWidth=1;
+  yTicks.forEach(y=>{ctx.beginPath();ctx.moveTo(PAD.left,cy(y));ctx.lineTo(PAD.left+W,cy(y));ctx.stroke();});
 
-  // Y axis labels
-  ctx.fillStyle="#888";
-  ctx.font=`${Math.round(7*dpr)/dpr}px 'Press Start 2P', monospace`;
-  ctx.textAlign="right";
-  yTicks.forEach(y=>{
-    const cy=PAD.top+H-(y/yMax)*H;
-    ctx.fillText(y,PAD.left-6,cy+3);
-  });
+  // Y labels
+  ctx.fillStyle="#555";ctx.textAlign="right";
+  ctx.font=`${Math.round(6*dpr)/dpr}px 'Press Start 2P',monospace`;
+  yTicks.forEach(y=>ctx.fillText(y,PAD.left-5,cy(y)+3));
 
-  // X axis labels
-  ctx.fillStyle="#888";
-  ctx.textAlign="center";
+  // X labels (date, abbreviated)
+  ctx.fillStyle="#555";ctx.textAlign="center";
   xTicks.forEach(i=>{
-    const cx=PAD.left+(i/(numPoints-1||1))*W;
-    const cy=PAD.top+H+16;
-    // Use first series labels (shared X)
-    const firstSeries=Object.values(series)[0];
-    const lbl=firstSeries?.labels[i]||String(i);
-    // Abbreviate date
-    const short=lbl.replace(/\d{4}/,"").replace(/^[^\d]*/,"").trim()||String(i);
-    ctx.fillText(short,cx,cy);
+    const lbl=seriesList[0]?.dates[i]||"";
+    // show DD/MM only
+    const m=lbl.match(/(\d+)\/(\d+)/);
+    ctx.fillText(m?`${m[1]}/${m[2]}`:String(i),cx(i),PAD.top+H+14);
   });
 
   // Axes
-  ctx.strokeStyle="rgba(255,255,255,.2)";
-  ctx.lineWidth=2;
+  ctx.strokeStyle="rgba(255,255,255,.18)";ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(PAD.left,PAD.top);ctx.lineTo(PAD.left,PAD.top+H);ctx.lineTo(PAD.left+W,PAD.top+H);ctx.stroke();
 
-  // Plot lines
-  Object.values(series).forEach(s=>{
-    const pts=s.points;
-    ctx.strokeStyle=s.color;
-    ctx.lineWidth=2.5;
-    ctx.lineJoin="round";
-    ctx.lineCap="round";
-    ctx.shadowColor=s.color;
-    ctx.shadowBlur=6;
+  // Lines
+  seriesList.forEach(s=>{
+    ctx.strokeStyle=s.color;ctx.lineWidth=2.5;ctx.lineJoin="round";ctx.lineCap="round";
+    ctx.shadowColor=s.color;ctx.shadowBlur=8;
     ctx.beginPath();
-    pts.forEach((v,i)=>{
-      const cx=PAD.left+(i/(numPoints-1||1))*W;
-      const cy=PAD.top+H-(v/yMax)*H;
-      i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);
-    });
-    ctx.stroke();
-    ctx.shadowBlur=0;
+    s.vals.forEach((v,i)=>i===0?ctx.moveTo(cx(i),cy(v)):ctx.lineTo(cx(i),cy(v)));
+    ctx.stroke();ctx.shadowBlur=0;
 
-    // Dots at tick positions
+    // Dots at ticks
     xTicks.forEach(i=>{
-      if(i>=pts.length)return;
-      const v=pts[i];
-      const cx=PAD.left+(i/(numPoints-1||1))*W;
-      const cy=PAD.top+H-(v/yMax)*H;
+      if(i>=s.vals.length)return;
       ctx.fillStyle=s.color;
-      ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();
-      // Value label
-      ctx.fillStyle="#fff";
-      ctx.font=`${Math.round(6*dpr)/dpr}px 'Press Start 2P', monospace`;
-      ctx.textAlign="center";
-      ctx.fillText(v,cx,cy-8);
+      ctx.beginPath();ctx.arc(cx(i),cy(s.vals[i]),3.5,0,Math.PI*2);ctx.fill();
     });
+
+    // Name label at end of line (if showLabels)
+    if(stShowLabels&&s.vals.length>0){
+      const lastI=s.vals.length-1;const lastV=s.vals[lastI];
+      ctx.fillStyle=s.color;ctx.textAlign="left";
+      ctx.font=`${Math.round(6*dpr)/dpr}px 'Press Start 2P',monospace`;
+      const short=s.name.length>8?s.name.slice(0,7)+"…":s.name;
+      ctx.fillText(short,cx(lastI)+6,cy(lastV)+3);
+    }
   });
 
-  // Legend
-  legend.innerHTML=Object.values(series).map(s=>{
-    const lastPt=s.points[s.points.length-1];
-    return`<div style="display:flex;align-items:center;gap:6px">
-      <div style="width:24px;height:3px;background:${s.color};box-shadow:0 0 6px ${s.color}"></div>
-      <span style="font-size:7px;color:${s.color}">${s.name}</span>
-      <span style="font-size:7px;color:var(--muted)">⭐${lastPt}</span>
-    </div>`;
-  }).join("");
+  // Store chart data for hover
+  stChartData={seriesList,numPts,yMax,PAD,W,H,cssW,cssH,xTicks,cx,cy};
+  setupChartHover(canvas);
 }
 
+function setupChartHover(canvas){
+  if(!canvas)return;
+  const tooltip=document.getElementById("st-tooltip");
+  if(!tooltip)return;
+
+  const onMove=e=>{
+    if(!stChartData)return;
+    const {seriesList,numPts,PAD,W,H,cx,cy}=stChartData;
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX||e.touches?.[0]?.clientX||0)-rect.left;
+    const my=(e.clientY||e.touches?.[0]?.clientY||0)-rect.top;
+
+    // Find closest X index
+    const relX=mx-PAD.left;
+    const pct=Math.max(0,Math.min(1,relX/W));
+    const rawI=pct*(numPts-1);
+    const i=Math.round(rawI);
+    if(i<0||i>=numPts){tooltip.style.display="none";return;}
+
+    // Check if mouse is within chart area
+    if(mx<PAD.left-8||mx>PAD.left+W+8||my<PAD.top-8||my>PAD.top+H+8){
+      tooltip.style.display="none";return;
+    }
+
+    // Draw vertical line via overlay (we redraw just the line)
+    // Build tooltip content
+    const rows=seriesList.map(s=>{
+      const v=i<s.vals.length?s.vals[i]:s.vals[s.vals.length-1];
+      return`<div style="display:flex;align-items:center;gap:6px">
+        <div style="width:16px;height:2px;background:${s.color}"></div>
+        <span style="color:${s.color}">${s.name}</span>
+        <span style="color:var(--muted);margin-left:auto;padding-left:10px">${v}</span>
+      </div>`;
+    }).join("");
+    const dateLbl=seriesList[0]?.dates[i]||"";
+    tooltip.innerHTML=`<div style="color:var(--muted);margin-bottom:5px;font-size:6px">${dateLbl||"Départ"}</div>${rows}`;
+
+    // Position tooltip
+    const scaleX=rect.width/parseFloat(canvas.style.width||1);
+    const tipX=cx(i)*scaleX;
+    let left=tipX+10;
+    if(left+160>rect.width)left=tipX-tooltip.offsetWidth-10;
+    tooltip.style.left=Math.max(0,left)+"px";
+    tooltip.style.top=Math.max(0,PAD.top-10)+"px";
+    tooltip.style.display="block";
+  };
+  const onLeave=()=>{if(tooltip)tooltip.style.display="none";};
+
+  canvas.onmousemove=onMove;
+  canvas.onmouseleave=onLeave;
+  canvas.ontouchmove=e=>{e.preventDefault();onMove(e);};
+}
 
 function initFirebase(){
   try{
