@@ -367,6 +367,18 @@ select option{background:var(--bg2)}
     </div>
     <div id="p-cardbg-prev"></div>
   </div>
+  <div class="fg">
+    <label class="lbl">BANNIÈRE DE TITRE <span style="color:var(--muted);font-size:7px">(TOP JOUEURS)</span></label>
+    <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border:2px solid var(--border)">
+      <div id="p-banner-toggle" onclick="toggleBannerPref()" style="width:36px;height:20px;background:var(--bg2);border:2px solid var(--border);cursor:pointer;position:relative;flex-shrink:0">
+        <div id="p-banner-knob" style="position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--muted);transition:.15s"></div>
+      </div>
+      <div>
+        <div style="font-size:8px">Afficher mon titre en bannière</div>
+        <div style="font-size:7px;color:var(--muted);margin-top:2px">Colore votre rang dans le Top Joueurs</div>
+      </div>
+    </div>
+  </div>
   <div class="brow"><button class="bg" onclick="cm('pModal')">ANNULER</button><button class="bp" id="pSubmitBtn" onclick="submitPlayer()">AJOUTER</button></div>
  </div>
 </div>
@@ -808,7 +820,8 @@ function goFact(i){feedIdx=i;renderFeedBlock();}
 
 function rAccueil(){
   if(feedInterval)clearInterval(feedInterval);
-  const lb2=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.victoires-a.victoires||b.parties-a.parties);
+  // Sort by points first, then victories as tiebreaker
+  const lb2=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.points-a.points||b.victoires-a.victoires);
   const recent=feed.slice(0,6);
   const allpho=[];feed.forEach(f=>(f.photos||[]).forEach(ph=>allpho.push({src:ph})));
   const photos=allpho.slice(0,12);
@@ -817,6 +830,13 @@ function rAccueil(){
   const totG=Object.keys(gameCounts).length;
   const topGid=Object.entries(gameCounts).sort((a,b)=>b[1]-a[1])[0];
   const topG=topGid?gg(topGid[0]):null;
+
+  // Rank color map for banners
+  const RANK_COLORS={
+    "rank-token":"#a0a0a0","rank-player":"#4caf50","rank-contender":"#26c6da",
+    "rank-planner":"#5b8fff","rank-tactician":"#b57aff","rank-strategist":"#ff5f87",
+    "rank-mastermind":"#ff9f43","rank-champion":"#f7c948","rank-legend":"#3dffd0","rank-god":"#f7c948"
+  };
 
   let h=`<div class="hero">
     <div class="htitle">🎲 GAME NIGHT 🎲</div>
@@ -840,16 +860,22 @@ function rAccueil(){
       ${lb2.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUN JOUEUR</div>`:
       lb2.slice(0,5).map((p,i)=>{
         const rk=getRank(p.points||0);
+        const rkColor=RANK_COLORS[rk.cls]||"#fff";
+        const showBanner=!!p.showBanner;
         const av=p.photo?`<div class="av" style="width:30px;height:30px;border-color:${p.color}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:30px;height:30px;background:${p.color};color:#000;font-size:9px">${p.name[0]}</div>`;
-        return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:14px;width:22px">${med(i)}</span>${av}
-          <div style="flex:1;min-width:0;overflow:hidden">
+        const banner=showBanner?`<div style="position:absolute;inset:0;background:${rkColor};opacity:.13;pointer-events:none"></div><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${rkColor}"></div>`:"";
+        const titleLabel=showBanner?`<div style="font-size:6px;color:${rkColor};letter-spacing:1px;margin-top:2px;white-space:nowrap">${rk.name}</div>`:`<div class="rank-badge ${rk.cls}">${rk.name}</div>`;
+        return`<div style="position:relative;display:flex;align-items:center;gap:8px;padding:8px ${showBanner?"8px 8px 8px 10px":"0"};border-bottom:1px solid var(--border);overflow:hidden">
+          ${banner}
+          <span style="font-size:14px;width:22px;position:relative">${med(i)}</span>
+          <div style="position:relative">${av}</div>
+          <div style="flex:1;min-width:0;overflow:hidden;position:relative">
             <div style="font-size:8px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${p.name}</div>
-            <div class="rank-badge ${rk.cls}">${rk.name}</div>
+            ${titleLabel}
           </div>
-          <div style="text-align:right;flex-shrink:0">
+          <div style="text-align:right;flex-shrink:0;position:relative">
             <div style="font-size:8px;color:var(--yellow)">${p.victoires}🏆</div>
-            <div style="font-size:8px;color:var(--cyan)">⭐${p.points||0}</div>
+            <div style="font-size:7px;color:var(--cyan)">⭐${p.points||0}</div>
           </div>
         </div>`;
       }).join("")}
@@ -1314,7 +1340,18 @@ function delMatch(id){
 }
 
 // ── PLAYER MODAL ──────────────────────────────────────────────────────────────
-let pCardBgImg=null, pCardBgColor=null;
+let pCardBgImg=null, pCardBgColor=null, pShowBanner=false;
+
+function setBannerUI(val){
+  pShowBanner=val;
+  const knob=document.getElementById("p-banner-knob");
+  const tog=document.getElementById("p-banner-toggle");
+  if(!knob||!tog)return;
+  knob.style.left=val?"20px":"2px";
+  knob.style.background=val?"var(--cyan)":"var(--muted)";
+  tog.style.borderColor=val?"var(--cyan)":"var(--border)";
+}
+function toggleBannerPref(){setBannerUI(!pShowBanner);}
 
 function clearCardBg(){
   pCardBgImg=null; pCardBgColor=null;
@@ -1334,6 +1371,7 @@ function openPM(){
   document.getElementById("pModalTitle").textContent="👾 AJOUTER JOUEUR";
   document.getElementById("pSubmitBtn").textContent="AJOUTER";
   selCol=COLS[players.length%COLS.length];bCols();
+  setBannerUI(false);
   document.getElementById("pModal").style.display="flex";
   setTimeout(()=>document.getElementById("p-name").focus(),100);
   document.getElementById("pp").onchange=async function(){
@@ -1369,6 +1407,7 @@ function openEP(id){
   document.getElementById("pModalTitle").textContent="✏️ MODIFIER JOUEUR";
   document.getElementById("pSubmitBtn").textContent="ENREGISTRER ✓";
   selCol=p.color||COLS[0];bCols();
+  setBannerUI(!!p.showBanner);
   document.getElementById("pModal").style.display="flex";
   document.getElementById("pp").onchange=async function(){
     if(!this.files[0])return;
@@ -1403,9 +1442,9 @@ function submitPlayer(){
   const name=document.getElementById("p-name").value.trim().toUpperCase();if(!name)return;
   if(epId){
     const p=players.find(x=>x.id===epId);
-    if(p){p.name=name;p.color=selCol;if(ppho)p.photo=ppho;p.cardBgImg=pCardBgImg||null;p.cardBgColor=pCardBgColor||null;}
+    if(p){p.name=name;p.color=selCol;if(ppho)p.photo=ppho;p.cardBgImg=pCardBgImg||null;p.cardBgColor=pCardBgColor||null;p.showBanner=pShowBanner;}
   } else {
-    players.push({id:Date.now().toString(),name,color:selCol,photo:ppho||null,cardBgImg:pCardBgImg||null,cardBgColor:pCardBgColor||null});
+    players.push({id:Date.now().toString(),name,color:selCol,photo:ppho||null,cardBgImg:pCardBgImg||null,cardBgColor:pCardBgColor||null,showBanner:pShowBanner});
   }
   sv();cm("pModal");rAll();
 }
@@ -1455,7 +1494,6 @@ function openDetail(gid){
 
   let h=`<div style="font-size:13px;color:var(--yellow);text-shadow:2px 2px 0 #b07000;margin-bottom:4px">${game.emoji} ${game.name}</div>`;
   h+=`<div style="font-size:8px;color:var(--muted);margin-bottom:14px">${totalGames} PARTIES JOUÉES</div>`;
-  if(game.img)h+=`<img src="${game.img}" style="width:100%;height:130px;object-fit:cover;border:3px solid var(--border);margin-bottom:14px"/>`;
 
   // Main player stats
   h+=`<div style="font-size:8px;color:var(--cyan);letter-spacing:1px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)">🏆 PALMARÈS</div>`;
@@ -1469,7 +1507,7 @@ function openDetail(gid){
         <span style="color:var(--muted)">${r.parties}p</span>
         <span style="color:var(--yellow)">${r.victoires}🥇</span>
         <span style="color:var(--cyan)">${r.seconds||0}🥈</span>
-        <span style="color:var(--orange)">⭐${r.points||0}</span>
+        <span style="color:var(--orange)">⭐${Math.max(0,r.points||0)}</span>
         <span style="color:${rate>=50?"var(--green)":"var(--muted)"}">${rate}%</span>
       </div>
     </div>`;
