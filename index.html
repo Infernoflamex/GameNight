@@ -101,8 +101,11 @@ img{image-rendering:auto!important;image-rendering:-webkit-optimize-contrast!imp
 .hsub{font-size:7px;color:var(--cyan);letter-spacing:3px;text-shadow:1px 1px 0 #000;position:relative}
 .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
 @media(max-width:560px){.hgrid{grid-template-columns:1fr}}
-.hpanel{background:var(--bg2);padding:14px}
-.hptitle{font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+.hpanel{background:var(--bg2);padding:14px;display:flex;flex-direction:column}
+.hpanel-body{flex:1;display:flex;flex-direction:column}
+.hpanel-row{flex:1;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);min-height:0}
+.hpanel-row:last-child{border-bottom:none}
+.hptitle{font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--border);flex-shrink:0}
 
 /* ROTATING FEED */
 .feed-block{background:var(--bg2);border:3px solid var(--cyan);box-shadow:4px 4px 0 var(--cyan);padding:16px;margin-bottom:18px;min-height:68px;display:flex;align-items:center;gap:14px;transition:opacity .4s}
@@ -232,6 +235,7 @@ select option{background:var(--bg2)}
     <button class="tab"     onclick="sw('classement',this)">🏆 TOP</button>
     <button class="tab"     onclick="sw('jeux',this)">🎮 JEUX</button>
     <button class="tab"     onclick="sw('historique',this)">📜 HISTO</button>
+    <button class="tab"     onclick="sw('stats',this)">📊 STATS</button>
     <button class="tab"     onclick="sw('joueurs',this)">👾 JOUEURS</button>
   </div>
 </div>
@@ -241,6 +245,7 @@ select option{background:var(--bg2)}
   <div id="pg-classement" class="page"></div>
   <div id="pg-jeux"       class="page"></div>
   <div id="pg-historique" class="page"></div>
+  <div id="pg-stats"      class="page"></div>
   <div id="pg-joueurs"    class="page"></div>
 </div>
 
@@ -741,6 +746,7 @@ function render(id){
   else if(id==="classement")rClass();
   else if(id==="jeux")rJeux();
   else if(id==="historique")rHisto();
+  else if(id==="stats")rStats();
   else if(id==="joueurs")rJoueurs();
 }
 function rAll(){const a=document.querySelector(".page.on");if(a)render(a.id.replace("pg-",""))}
@@ -857,6 +863,7 @@ function rAccueil(){
   <div class="hgrid">
     <div class="hpanel px-y">
       <div class="hptitle" style="color:var(--yellow)">🏆 TOP JOUEURS</div>
+      <div class="hpanel-body">
       ${lb2.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUN JOUEUR</div>`:
       lb2.slice(0,5).map((p,i)=>{
         const rk=getRank(p.points||0);
@@ -865,10 +872,10 @@ function rAccueil(){
         const av=p.photo?`<div class="av" style="width:30px;height:30px;border-color:${p.color}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:30px;height:30px;background:${p.color};color:#000;font-size:9px">${p.name[0]}</div>`;
         const banner=showBanner?`<div style="position:absolute;inset:0;background:${rkColor};opacity:.13;pointer-events:none"></div><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${rkColor}"></div>`:"";
         const titleLabel=showBanner?`<div style="font-size:6px;color:${rkColor};letter-spacing:1px;margin-top:2px;white-space:nowrap">${rk.name}</div>`:`<div class="rank-badge ${rk.cls}">${rk.name}</div>`;
-        return`<div style="position:relative;display:flex;align-items:center;gap:8px;padding:8px ${showBanner?"8px 8px 8px 10px":"0"};border-bottom:1px solid var(--border);overflow:hidden">
+        return`<div class="hpanel-row" style="position:relative;padding:6px ${showBanner?"6px 6px 8px":"0"};overflow:hidden">
           ${banner}
-          <span style="font-size:14px;width:22px;position:relative">${med(i)}</span>
-          <div style="position:relative">${av}</div>
+          <span style="font-size:14px;width:22px;position:relative;flex-shrink:0">${med(i)}</span>
+          <div style="position:relative;flex-shrink:0">${av}</div>
           <div style="flex:1;min-width:0;overflow:hidden;position:relative">
             <div style="font-size:8px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${p.name}</div>
             ${titleLabel}
@@ -879,21 +886,24 @@ function rAccueil(){
           </div>
         </div>`;
       }).join("")}
+      </div>
     </div>
     <div class="hpanel px-p">
       <div class="hptitle" style="color:var(--pink)">🕹️ DERNIÈRES PARTIES</div>
+      <div class="hpanel-body">
       ${recent.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUNE PARTIE</div>`:
       recent.slice(0,5).map(f=>{
         const game=gg(f.gameId);const wid=getWinner(f);const winner=players.find(p=>p.id===wid);
-        return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:16px">${game?.emoji||"🎲"}</span>
+        return`<div class="hpanel-row" style="padding:6px 0;gap:8px">
+          <span style="font-size:16px;flex-shrink:0">${game?.emoji||"🎲"}</span>
           <div style="flex:1;min-width:0">
             <div style="font-size:7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${game?.name||f.gameId}</div>
             <div style="font-size:7px;color:var(--muted);margin-top:2px">${fd(f.date)}</div>
           </div>
-          ${winner?`<span style="font-size:7px;color:var(--green)">🏆${winner.name}</span>`:""}
+          ${winner?`<span style="font-size:7px;color:var(--green);flex-shrink:0">🏆${winner.name}</span>`:""}
         </div>`;
       }).join("")}
+      </div>
     </div>
   </div>
 
@@ -1811,7 +1821,247 @@ function resetSettings(){
   saveSettings();openSettings();
 }
 
-// ── FIREBASE INIT ─────────────────────────────────────────────────────────────
+// ── STATS TAB ─────────────────────────────────────────────────────────────────
+let stSelPlayers=[], stSelGame="all", stVsOnly=false;
+
+function rStats(){
+  // Initialize selection defaults on first load
+  if(!stSelPlayers.length && players.length) stSelPlayers=[players[0].id];
+
+  let h=`<div class="stitle">📊 STATISTIQUES</div>`;
+
+  // ── FILTERS ──────────────────────────────────────────────────────────────────
+  h+=`<div style="background:var(--bg2);border:3px solid var(--border);padding:14px;margin-bottom:14px">
+
+    <div style="font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px">JOUEURS À COMPARER</div>
+    <div id="st-players" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">`;
+  players.forEach(p=>{
+    const sel=stSelPlayers.includes(p.id);
+    h+=`<button class="chip${sel?" sel":""}" style="${sel?"border-color:"+p.color+";color:"+p.color:""}background:var(--bg3)" onclick="stTogglePlayer('${p.id}')">
+      <span class="dot" style="background:${p.color}"></span>${p.name}
+    </button>`;
+  });
+  h+=`</div>
+
+    <div style="font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px">FILTRER PAR JEU</div>
+    <div id="st-games" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <button class="chip${stSelGame==="all"?" sel":""}" onclick="stSetGame('all')">TOUS LES JEUX</button>`;
+  ag().filter(g=>feed.some(f=>f.gameId===g.id)).forEach(g=>{
+    h+=`<button class="chip${stSelGame===g.id?" sel":""}" onclick="stSetGame('${g.id}')">${g.emoji} ${g.name}</button>`;
+  });
+  h+=`</div>
+
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="st-vs-toggle" onclick="stToggleVs()" style="width:36px;height:20px;background:var(--bg3);border:2px solid ${stVsOnly?"var(--cyan)":"var(--border)"};cursor:pointer;position:relative;flex-shrink:0">
+        <div style="position:absolute;top:2px;left:${stVsOnly?"20":"2"}px;width:12px;height:12px;background:${stVsOnly?"var(--cyan)":"var(--muted)"};transition:.15s"></div>
+      </div>
+      <div>
+        <div style="font-size:8px">Parties communes uniquement</div>
+        <div style="font-size:7px;color:var(--muted);margin-top:2px">Seulement les parties où tous les joueurs sélectionnés jouent ensemble</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRAPH AREA -->
+  <div style="background:var(--bg2);border:3px solid var(--border);padding:14px;margin-bottom:14px">
+    <div style="font-size:8px;color:var(--cyan);letter-spacing:2px;margin-bottom:12px">⭐ ÉVOLUTION DES POINTS CUMULÉS</div>
+    <canvas id="st-canvas" style="width:100%;display:block"></canvas>
+    <div id="st-legend" style="display:flex;flex-wrap:wrap;gap:14px;margin-top:12px"></div>
+    <div id="st-empty" style="display:none;text-align:center;padding:40px 0;font-size:8px;color:var(--muted)">AUCUNE DONNÉE POUR CES FILTRES.</div>
+  </div>`;
+
+  document.getElementById("pg-stats").innerHTML=h;
+  drawStatsChart();
+}
+
+function stTogglePlayer(id){
+  if(stSelPlayers.includes(id)){
+    if(stSelPlayers.length>1)stSelPlayers=stSelPlayers.filter(x=>x!==id);
+  } else {
+    stSelPlayers.push(id);
+  }
+  rStats();
+}
+function stSetGame(id){stSelGame=id;rStats();}
+function stToggleVs(){stVsOnly=!stVsOnly;rStats();}
+
+function drawStatsChart(){
+  const canvas=document.getElementById("st-canvas");
+  const legend=document.getElementById("st-legend");
+  const emptyMsg=document.getElementById("st-empty");
+  if(!canvas)return;
+
+  // Build data series per player
+  // Get relevant feed entries, sorted oldest→newest
+  let entries=[...feed].sort((a,b)=>new Date(a.date)-new Date(b.date)||(a.id>b.id?1:-1));
+
+  // Filter by game
+  if(stSelGame!=="all") entries=entries.filter(f=>f.gameId===stSelGame);
+
+  // Filter: only entries where all selected players participate (if vsOnly)
+  if(stVsOnly && stSelPlayers.length>1){
+    entries=entries.filter(f=>stSelPlayers.every(pid=>(f.playerIds||[]).includes(pid)));
+  } else {
+    // Show only entries where at least one selected player participated
+    entries=entries.filter(f=>stSelPlayers.some(pid=>(f.playerIds||[]).includes(pid)));
+  }
+
+  if(!entries.length){
+    canvas.style.display="none";
+    emptyMsg.style.display="block";
+    legend.innerHTML="";
+    return;
+  }
+  canvas.style.display="block";
+  emptyMsg.style.display="none";
+
+  // Build cumulative points series per player
+  const series={};
+  stSelPlayers.forEach(pid=>{
+    const p=players.find(x=>x.id===pid);
+    series[pid]={name:p?.name||pid,color:p?.color||"#fff",points:[0],labels:["0"]};
+    let cum=0;
+    entries.forEach((f,i)=>{
+      if(!(f.playerIds||[]).includes(pid)){
+        // Player didn't participate — carry forward
+        series[pid].points.push(cum);
+        series[pid].labels.push(fd(f.date));
+        return;
+      }
+      // Compute points earned in this match
+      const rnk=getRankings(f);
+      const rankedSet=new Set(rnk.flatMap(r=>r.pids));
+      if(!rankedSet.has(pid)){
+        // Lost: -1 but floor at 0
+        cum=Math.max(0,cum-1);
+      } else {
+        const r=rnk.find(r=>r.pids.includes(pid));
+        const pts=r?r.place===1?3:r.place===2?2:r.place===3?1:0:0;
+        cum=Math.max(0,cum+pts);
+      }
+      series[pid].points.push(cum);
+      series[pid].labels.push(fd(f.date));
+    });
+  });
+
+  // Determine X axis labels (up to 10 ticks)
+  const numPoints=entries.length+1; // +1 for start
+  const step=Math.max(1,Math.ceil((numPoints-1)/10));
+  const xTicks=[];
+  for(let i=0;i<numPoints;i+=step) xTicks.push(i);
+  if(!xTicks.includes(numPoints-1)) xTicks.push(numPoints-1);
+
+  // Compute max Y
+  let maxY=0;
+  Object.values(series).forEach(s=>s.points.forEach(v=>{ if(v>maxY)maxY=v; }));
+  maxY=Math.max(maxY,5);
+  // Nice Y scale: round up to a multiple of a nice number
+  const yStep=maxY<=10?1:maxY<=30?5:maxY<=100?10:maxY<=300?25:50;
+  const yMax=Math.ceil(maxY/yStep)*yStep;
+  const yTicks=[];
+  for(let y=0;y<=yMax;y+=yStep) yTicks.push(y);
+
+  // Draw on canvas
+  const dpr=window.devicePixelRatio||1;
+  const cssW=canvas.parentElement.clientWidth-28; // padding subtracted
+  const cssH=Math.max(200,Math.round(cssW*0.45));
+  canvas.width=cssW*dpr;
+  canvas.height=cssH*dpr;
+  canvas.style.width=cssW+"px";
+  canvas.style.height=cssH+"px";
+  const ctx=canvas.getContext("2d");
+  ctx.scale(dpr,dpr);
+
+  const PAD={top:20,right:20,bottom:50,left:44};
+  const W=cssW-PAD.left-PAD.right;
+  const H=cssH-PAD.top-PAD.bottom;
+
+  // Background
+  ctx.fillStyle="#0d0d1a";
+  ctx.fillRect(0,0,cssW,cssH);
+
+  // Grid lines
+  ctx.strokeStyle="rgba(255,255,255,.07)";
+  ctx.lineWidth=1;
+  yTicks.forEach(y=>{
+    const cy=PAD.top+H-(y/yMax)*H;
+    ctx.beginPath();ctx.moveTo(PAD.left,cy);ctx.lineTo(PAD.left+W,cy);ctx.stroke();
+  });
+
+  // Y axis labels
+  ctx.fillStyle="#888";
+  ctx.font=`${Math.round(7*dpr)/dpr}px 'Press Start 2P', monospace`;
+  ctx.textAlign="right";
+  yTicks.forEach(y=>{
+    const cy=PAD.top+H-(y/yMax)*H;
+    ctx.fillText(y,PAD.left-6,cy+3);
+  });
+
+  // X axis labels
+  ctx.fillStyle="#888";
+  ctx.textAlign="center";
+  xTicks.forEach(i=>{
+    const cx=PAD.left+(i/(numPoints-1||1))*W;
+    const cy=PAD.top+H+16;
+    // Use first series labels (shared X)
+    const firstSeries=Object.values(series)[0];
+    const lbl=firstSeries?.labels[i]||String(i);
+    // Abbreviate date
+    const short=lbl.replace(/\d{4}/,"").replace(/^[^\d]*/,"").trim()||String(i);
+    ctx.fillText(short,cx,cy);
+  });
+
+  // Axes
+  ctx.strokeStyle="rgba(255,255,255,.2)";
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(PAD.left,PAD.top);ctx.lineTo(PAD.left,PAD.top+H);ctx.lineTo(PAD.left+W,PAD.top+H);ctx.stroke();
+
+  // Plot lines
+  Object.values(series).forEach(s=>{
+    const pts=s.points;
+    ctx.strokeStyle=s.color;
+    ctx.lineWidth=2.5;
+    ctx.lineJoin="round";
+    ctx.lineCap="round";
+    ctx.shadowColor=s.color;
+    ctx.shadowBlur=6;
+    ctx.beginPath();
+    pts.forEach((v,i)=>{
+      const cx=PAD.left+(i/(numPoints-1||1))*W;
+      const cy=PAD.top+H-(v/yMax)*H;
+      i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);
+    });
+    ctx.stroke();
+    ctx.shadowBlur=0;
+
+    // Dots at tick positions
+    xTicks.forEach(i=>{
+      if(i>=pts.length)return;
+      const v=pts[i];
+      const cx=PAD.left+(i/(numPoints-1||1))*W;
+      const cy=PAD.top+H-(v/yMax)*H;
+      ctx.fillStyle=s.color;
+      ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();
+      // Value label
+      ctx.fillStyle="#fff";
+      ctx.font=`${Math.round(6*dpr)/dpr}px 'Press Start 2P', monospace`;
+      ctx.textAlign="center";
+      ctx.fillText(v,cx,cy-8);
+    });
+  });
+
+  // Legend
+  legend.innerHTML=Object.values(series).map(s=>{
+    const lastPt=s.points[s.points.length-1];
+    return`<div style="display:flex;align-items:center;gap:6px">
+      <div style="width:24px;height:3px;background:${s.color};box-shadow:0 0 6px ${s.color}"></div>
+      <span style="font-size:7px;color:${s.color}">${s.name}</span>
+      <span style="font-size:7px;color:var(--muted)">⭐${lastPt}</span>
+    </div>`;
+  }).join("");
+}
+
+
 function initFirebase(){
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
