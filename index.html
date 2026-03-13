@@ -952,17 +952,65 @@ function buildFacts(){
   return facts.length?facts:[{e:"🎲",t:"Ajoutez des parties pour voir des statistiques !"}];
 }
 
-let feedInterval=null;
+let feedInterval=null,feedBatchInterval=null;
+function buildFactBatch(allFacts){
+  // Limit 3 facts per player name (extract name from HTML spans)
+  const playerCount={};
+  const filtered=[];
+  for(const f of allFacts){
+    // Extract first player name mentioned (color:var(--yellow) span)
+    const m=f.t.match(/color:var\(--yellow\)"[^>]*>([^<]+)<\/span>/);
+    const name=m?m[1]:"__global";
+    if((playerCount[name]||0)<3){
+      playerCount[name]=(playerCount[name]||0)+1;
+      filtered.push(f);
+    }
+  }
+  // Shuffle and take 10
+  const shuffled=[...filtered].sort(()=>Math.random()-.5);
+  return shuffled.slice(0,10);
+}
+
 function startFeed(){
   if(feedInterval)clearInterval(feedInterval);
-  feedFacts=buildFacts().slice(0,10);feedIdx=0;
+  if(feedBatchInterval)clearInterval(feedBatchInterval);
+
+  const allFacts=buildFacts();
+  feedFacts=buildFactBatch(allFacts);feedIdx=0;
   renderFeedBlock();
-  if(feedFacts.length>1) feedInterval=setInterval(()=>{
-    const el=document.getElementById("feed-block");
-    if(!el)return clearInterval(feedInterval);
-    el.classList.add("fade");
-    setTimeout(()=>{feedIdx=(feedIdx+1)%feedFacts.length;renderFeedBlock();el.classList.remove("fade");},500);
-  },7000);
+
+  // Cycle through current 10 facts every 7s
+  if(feedFacts.length>1){
+    feedInterval=setInterval(()=>{
+      const el=document.getElementById("feed-block");
+      if(!el){clearInterval(feedInterval);return;}
+      feedIdx++;
+      if(feedIdx>=feedFacts.length){
+        // Reached end of batch — pause display, wait 5 min then new batch
+        el.classList.add("fade");
+        clearInterval(feedInterval);feedInterval=null;
+        feedBatchInterval=setTimeout(()=>{
+          const allF=buildFacts();
+          feedFacts=buildFactBatch(allF);feedIdx=0;
+          const el2=document.getElementById("feed-block");
+          if(!el2)return;
+          el2.classList.remove("fade");
+          renderFeedBlock();
+          // Restart cycle
+          feedInterval=setInterval(()=>{
+            const e3=document.getElementById("feed-block");
+            if(!e3){clearInterval(feedInterval);return;}
+            feedIdx=(feedIdx+1)%feedFacts.length;
+            e3.classList.add("fade");
+            setTimeout(()=>{renderFeedBlock();e3.classList.remove("fade");},500);
+          },7000);
+        },5*60*1000);
+        return;
+      }
+      el.classList.add("fade");
+      setTimeout(()=>{renderFeedBlock();el.classList.remove("fade");},500);
+    },7000);
+  }
 }
 function renderFeedBlock(){
   const el=document.getElementById("feed-block");
@@ -1202,20 +1250,73 @@ function rJeux(){
 }
 
 // ── HISTORIQUE ────────────────────────────────────────────────────────────────
+let histoPlayerFilter="all", histoGameFilter="all", histoShown=5;
+
 function rHisto(){
+  histoShown=5; // reset on re-render
+  const filtered=getHistoFiltered();
+
   let h=`<div class="stitle">📜 HISTORIQUE (${feed.length})</div>`;
-  if(!feed.length){h+=`<div class="empty">AUCUNE PARTIE.</div>`;document.getElementById("pg-historique").innerHTML=h;return;}
-  feed.forEach(f=>{
+
+  // Filters row
+  h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    <select onchange="histoPlayerFilter=this.value;rHisto()"
+      style="font-family:'Press Start 2P',monospace;font-size:7px;background:var(--bg3);border:2px solid ${histoPlayerFilter!=="all"?"var(--cyan)":"var(--border)"};color:var(--white);padding:6px 8px;cursor:pointer;outline:none;flex:1;min-width:120px">
+      <option value="all"${histoPlayerFilter==="all"?" selected":""}>👤 TOUS LES JOUEURS</option>
+      ${players.map(p=>`<option value="${p.id}"${histoPlayerFilter===p.id?" selected":""}>${p.name}</option>`).join("")}
+    </select>
+    <select onchange="histoGameFilter=this.value;rHisto()"
+      style="font-family:'Press Start 2P',monospace;font-size:7px;background:var(--bg3);border:2px solid ${histoGameFilter!=="all"?"var(--yellow)":"var(--border)"};color:var(--white);padding:6px 8px;cursor:pointer;outline:none;flex:1;min-width:120px">
+      <option value="all"${histoGameFilter==="all"?" selected":""}>🎲 TOUS LES JEUX</option>
+      ${ag().filter(g=>feed.some(f=>f.gameId===g.id)).map(g=>`<option value="${g.id}"${histoGameFilter===g.id?" selected":""}>${g.emoji} ${g.name}</option>`).join("")}
+    </select>
+  </div>`;
+
+  if(!filtered.length){
+    h+=`<div class="empty">AUCUNE PARTIE TROUVÉE.</div>`;
+    document.getElementById("pg-historique").innerHTML=h;return;
+  }
+
+  h+=`<div id="histo-list"></div>`;
+  h+=`<div id="histo-more-wrap" style="text-align:center;margin-top:14px;${filtered.length<=5?"display:none":""}">
+    <button class="see-more-btn" onclick="histoLoadMore()">▼ VOIR PLUS (${Math.max(0,filtered.length-5)} restantes)</button>
+  </div>`;
+
+  document.getElementById("pg-historique").innerHTML=h;
+  renderHistoItems(filtered,0,5);
+}
+
+function getHistoFiltered(){
+  let f=[...feed].reverse(); // newest first
+  if(histoPlayerFilter!=="all") f=f.filter(e=>(e.playerIds||[]).includes(histoPlayerFilter));
+  if(histoGameFilter!=="all") f=f.filter(e=>e.gameId===histoGameFilter);
+  return f;
+}
+
+function histoLoadMore(){
+  const filtered=getHistoFiltered();
+  const oldShown=histoShown;
+  histoShown=Math.min(histoShown+5,filtered.length);
+  renderHistoItems(filtered,oldShown,histoShown);
+  const wrap=document.getElementById("histo-more-wrap");
+  const btn=wrap?.querySelector("button");
+  if(histoShown>=filtered.length){if(wrap)wrap.style.display="none";}
+  else if(btn)btn.textContent=`▼ VOIR PLUS (${filtered.length-histoShown} restantes)`;
+}
+
+function renderHistoItems(filtered,from,to){
+  const list=document.getElementById("histo-list");
+  if(!list)return;
+  const slice=filtered.slice(from,to);
+  let html="";
+  slice.forEach(f=>{
     const game=gg(f.gameId);
     const rnk=getRankings(f);
     const gim=game?.img?`<img src="${game.img}" style="width:100%;height:100%;object-fit:cover"/>`:`<span style="font-size:28px">${game?.emoji||"🎲"}</span>`;
     const pho=(f.photos||[]);
-
-    // Build ranked display — all players shown once, with their rank and score
     const rankedPids=new Set(rnk.flatMap(r=>r.pids));
     const unranked=(f.playerIds||[]).filter(id=>!rankedPids.has(id));
-    const scores=f.scores||{};
-    const hasScores=Object.keys(scores).length>0;
+    const scores=f.scores||{};const hasScores=Object.keys(scores).length>0;
     let rankHtml="";
     rnk.forEach(r=>{
       const names=r.pids.map(pid=>{
@@ -1231,7 +1332,6 @@ function rHisto(){
         <span style="font-size:8px;color:${col};line-height:1.8">${names}${tie}</span>
       </div>`;
     });
-    // Losers (not ranked) shown at bottom
     if(unranked.length){
       const names=unranked.map(id=>{
         const p=players.find(x=>x.id===id);
@@ -1243,8 +1343,7 @@ function rHisto(){
         <span style="font-size:8px;color:var(--muted)">${names}</span>
       </div>`;
     }
-
-    h+=`<div class="fitem">
+    html+=`<div class="fitem">
       <div class="fthumb">${gim}</div>
       <div class="fbody">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
@@ -1256,7 +1355,7 @@ function rHisto(){
           <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0">
             <button class="ebtn" onclick="openEM('${f.id}')" title="Modifier">✏️</button>
             <button class="dbtn" onclick="delMatch('${f.id}')" title="Supprimer">✕</button>
-            <button class="fphoto-btn${pho.length?' has-photos':''}" onclick="toggleMatchPhotos(this,'${f.id}')" title="${pho.length?'Revoir la Partie':'Pas d\'image'}">${pho.length?"📸":"🚫"}</button>
+            <button class="fphoto-btn${pho.length?" has-photos":""}" onclick="toggleMatchPhotos(this,'${f.id}')" title="${pho.length?"Revoir la Partie":"Pas d\'image"}">${pho.length?"📸":"🚫"}</button>
           </div>
         </div>
         <div id="mphotos-${f.id}" style="display:none;margin-top:10px">
@@ -1265,7 +1364,8 @@ function rHisto(){
       </div>
     </div>`;
   });
-  document.getElementById("pg-historique").innerHTML=h;
+  if(from===0) list.innerHTML=html;
+  else list.insertAdjacentHTML("beforeend",html);
 }
 
 function toggleMatchPhotos(btn,fid){
@@ -2246,47 +2346,52 @@ function setupChartHover(canvas){
 
   const onMove=e=>{
     if(!stChartData)return;
-    const {seriesList,numPts,PAD,W,H,cx,cy}=stChartData;
+    const {seriesList,numPts,PAD,W,H}=stChartData;
     const rect=canvas.getBoundingClientRect();
-    const mx=(e.clientX||e.touches?.[0]?.clientX||0)-rect.left;
-    const my=(e.clientY||e.touches?.[0]?.clientY||0)-rect.top;
 
-    // Find closest X index
-    const relX=mx-PAD.left;
-    const pct=Math.max(0,Math.min(1,relX/W));
-    const rawI=pct*(numPts-1);
-    const i=Math.round(rawI);
-    if(i<0||i>=numPts){tooltip.style.display="none";return;}
+    // Use CSS coordinates (getBoundingClientRect is already in CSS px)
+    const mx=(e.clientX??e.touches?.[0]?.clientX??0)-rect.left;
+    const my=(e.clientY??e.touches?.[0]?.clientY??0)-rect.top;
 
-    // Check if mouse is within chart area
-    if(mx<PAD.left-8||mx>PAD.left+W+8||my<PAD.top-8||my>PAD.top+H+8){
+    // Scale from CSS pixels to canvas logical pixels
+    const scaleX=parseFloat(canvas.style.width)/rect.width;
+    const lx=mx*scaleX; // logical x
+    const ly=my*scaleX; // logical y (same scale)
+
+    // Check bounds (allow a little past right edge for last point)
+    if(lx<PAD.left-12||lx>PAD.left+W+12||ly<PAD.top-12||ly>PAD.top+H+12){
       tooltip.style.display="none";return;
     }
 
-    // Draw vertical line via overlay (we redraw just the line)
-    // Build tooltip content
+    // Snap to nearest X index
+    const relX=Math.max(0,Math.min(W,lx-PAD.left));
+    const rawI=relX/W*(numPts-1);
+    const i=Math.round(rawI);
+    const clampedI=Math.max(0,Math.min(numPts-1,i));
+
     const rows=seriesList.map(s=>{
-      const v=i<s.vals.length?s.vals[i]:s.vals[s.vals.length-1];
-      return`<div style="display:flex;align-items:center;gap:6px">
-        <div style="width:16px;height:2px;background:${s.color}"></div>
-        <span style="color:${s.color}">${s.name}</span>
-        <span style="color:var(--muted);margin-left:auto;padding-left:10px">${v}</span>
+      const v=clampedI<s.vals.length?s.vals[clampedI]:s.vals[s.vals.length-1];
+      return`<div style="display:flex;align-items:center;gap:6px;padding:1px 0">
+        <div style="width:16px;height:2px;background:${s.color};flex-shrink:0"></div>
+        <span style="color:${s.color};flex:1">${s.name}</span>
+        <span style="color:var(--white);margin-left:8px;font-size:8px">${v}</span>
       </div>`;
     }).join("");
-    const dateLbl=seriesList[0]?.dates[i]||"";
-    tooltip.innerHTML=`<div style="color:var(--muted);margin-bottom:5px;font-size:6px">${dateLbl||"Départ"}</div>${rows}`;
 
-    // Position tooltip
-    const scaleX=rect.width/parseFloat(canvas.style.width||1);
-    const tipX=cx(i)*scaleX;
-    let left=tipX+10;
-    if(left+160>rect.width)left=tipX-tooltip.offsetWidth-10;
+    const dateLbl=seriesList[0]?.dates[clampedI]||"";
+    tooltip.innerHTML=`<div style="color:var(--muted);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px">${clampedI===0?"DÉPART":dateLbl}</div>${rows}`;
+
+    // Position tooltip in CSS coordinates
+    const tipCssX=(PAD.left+(clampedI/(numPts-1||1))*W)/scaleX;
+    let left=tipCssX+10;
+    const tipW=tooltip.offsetWidth||140;
+    if(left+tipW>rect.width-4)left=tipCssX-tipW-10;
     tooltip.style.left=Math.max(0,left)+"px";
-    tooltip.style.top=Math.max(0,PAD.top-10)+"px";
+    tooltip.style.top="4px";
     tooltip.style.display="block";
   };
-  const onLeave=()=>{if(tooltip)tooltip.style.display="none";};
 
+  const onLeave=()=>{if(tooltip)tooltip.style.display="none";};
   canvas.onmousemove=onMove;
   canvas.onmouseleave=onLeave;
   canvas.ontouchmove=e=>{e.preventDefault();onMove(e);};
