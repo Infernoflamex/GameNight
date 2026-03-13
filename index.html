@@ -949,6 +949,107 @@ function buildFacts(){
     if(bestP&&bestGain>=4)facts.push({e:"🚀",t:`<span style="color:var(--yellow)">${bestP.name}</span> est en feu — <span style="color:var(--green)">+${bestGain} points</span> lors des 3 dernières parties !`});
   }
 
+  // ── SCORE-BASED FACTS ──────────────────────────────────────────────────────
+  // "X was only N pts behind 1st" — look at score gaps in matches with scores
+  feed.forEach(f=>{
+    const scores=f.scores||{};
+    const sKeys=Object.keys(scores);
+    if(sKeys.length<2)return;
+    const rnk=getRankings(f);
+    const first=rnk.find(r=>r.place===1);
+    if(!first||!first.pids.length)return;
+    const firstPid=first.pids[0];
+    const firstScore=parseFloat(scores[firstPid]);
+    if(isNaN(firstScore))return;
+    // Find 2nd place player closest to 1st
+    const second=rnk.find(r=>r.place===2);
+    if(!second||!second.pids.length)return;
+    const secPid=second.pids[0];
+    const secScore=parseFloat(scores[secPid]);
+    if(isNaN(secScore))return;
+    const gap=Math.abs(firstScore-secScore);
+    if(gap>0&&gap<=5){
+      const fp=players.find(p=>p.id===firstPid),sp=players.find(p=>p.id===secPid);
+      const g=gg(f.gameId);
+      if(fp&&sp&&g)facts.push({e:"😤",t:`À <span style="color:var(--cyan)">${g.name}</span>, <span style="color:var(--yellow)">${sp.name}</span> n'était qu'à <span style="color:var(--pink)">${gap} pt${gap>1?"s":""}</span> de <span style="color:var(--green)">${fp.name}</span> !`});
+    }
+  });
+
+  // "X has finished 2nd Y times out of Z games played"
+  players.forEach(p=>{
+    const tot=gt(p.id);
+    if(tot.parties<3)return;
+    const totalSeconds=Object.values(stats[p.id]||{}).reduce((s,g)=>s+(g.seconds||0),0);
+    if(totalSeconds>=2)facts.push({e:"🥈",t:`<span style="color:var(--yellow)">${p.name}</span> a fini <span style="color:var(--cyan)">2ème</span> à <span style="color:var(--pink)">${totalSeconds} reprises</span> sur ${tot.parties} parties au total !`});
+  });
+
+  // ── MULTI-PLAYER RIVALRY FACTS ─────────────────────────────────────────────
+  if(players.length>=2){
+    // Closest rivals: two players within N points of each other overall
+    const ranked=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.points-a.points);
+    for(let i=0;i<ranked.length-1;i++){
+      const a=ranked[i],b=ranked[i+1];
+      const diff=(a.points||0)-(b.points||0);
+      if(diff>=0&&diff<=3&&(a.points||0)>0){
+        facts.push({e:"⚡",t:`<span style="color:var(--yellow)">${a.name}</span> et <span style="color:var(--pink)">${b.name}</span> se tiennent à seulement <span style="color:var(--cyan)">${diff} point${diff!==1?"s":""}</span> au classement !`});
+      }
+    }
+
+    // Shared winless streak against each other
+    players.forEach(a=>{
+      players.forEach(b=>{
+        if(a.id>=b.id)return;
+        const shared=feed.filter(f=>(f.playerIds||[]).includes(a.id)&&(f.playerIds||[]).includes(b.id));
+        if(shared.length<3)return;
+        let aWins=0,bWins=0;
+        shared.forEach(f=>{
+          const rnk=getRankings(f);
+          const aPlace=rnk.find(r=>r.pids.includes(a.id))?.place||99;
+          const bPlace=rnk.find(r=>r.pids.includes(b.id))?.place||99;
+          if(aPlace<bPlace)aWins++;else if(bPlace<aPlace)bWins++;
+        });
+        const total=aWins+bWins;
+        if(total<2)return;
+        const pa=players.find(p=>p.id===a.id),pb=players.find(p=>p.id===b.id);
+        if(!pa||!pb)return;
+        if(aWins===0&&bWins>=3)facts.push({e:"🏹",t:`<span style="color:var(--yellow)">${pb.name}</span> n'a <span style="color:var(--red)">jamais perdu</span> contre <span style="color:var(--pink)">${pa.name}</span> en ${bWins} face-à-face !`});
+        else if(bWins===0&&aWins>=3)facts.push({e:"🏹",t:`<span style="color:var(--yellow)">${pa.name}</span> n'a <span style="color:var(--red)">jamais perdu</span> contre <span style="color:var(--pink)">${pb.name}</span> en ${aWins} face-à-face !`});
+        else if(Math.abs(aWins-bWins)<=1&&total>=4)facts.push({e:"⚔️",t:`<span style="color:var(--yellow)">${pa.name}</span> vs <span style="color:var(--pink)">${pb.name}</span> : rivalité parfaite <span style="color:var(--cyan)">${aWins}-${bWins}</span> en ${total} confrontations !`});
+      });
+    });
+
+    // All three podiums same session
+    feed.forEach(f=>{
+      const rnk=getRankings(f);
+      if(rnk.length<3)return;
+      const g=gg(f.gameId);if(!g)return;
+      const p1=players.find(p=>p.id===rnk[0]?.pids?.[0]);
+      const p2=players.find(p=>p.id===rnk[1]?.pids?.[0]);
+      const p3=players.find(p=>p.id===rnk[2]?.pids?.[0]);
+      if(p1&&p2&&p3&&(f.playerIds||[]).length>=4){
+        facts.push({e:"🎖️",t:`Podium complet à <span style="color:var(--cyan)">${g.name}</span> : <span style="color:var(--yellow)">${p1.name}</span> 🥇 <span style="color:var(--pink)">${p2.name}</span> 🥈 <span style="color:var(--green)">${p3.name}</span> 🥉`});
+      }
+    });
+
+    // Biggest points gap between 1st and last in a single game
+    let biggestGapFact=null,biggestGap=0;
+    feed.forEach(f=>{
+      const scores=f.scores||{};if(Object.keys(scores).length<2)return;
+      const vals=Object.values(scores).map(parseFloat).filter(v=>!isNaN(v));
+      if(vals.length<2)return;
+      const gap=Math.max(...vals)-Math.min(...vals);
+      if(gap>biggestGap){
+        biggestGap=gap;
+        const g=gg(f.gameId);
+        const winPid=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
+        const losePid=Object.entries(scores).sort((a,b)=>a[1]-b[1])[0][0];
+        const wp=players.find(p=>p.id===winPid),lp=players.find(p=>p.id===losePid);
+        if(wp&&lp&&g)biggestGapFact={e:"💥",t:`Record d'écart à <span style="color:var(--cyan)">${g.name}</span> : <span style="color:var(--yellow)">${wp.name}</span> a écrasé <span style="color:var(--pink)">${lp.name}</span> de <span style="color:var(--red)">${gap} pts</span> !`};
+      }
+    });
+    if(biggestGapFact)facts.push(biggestGapFact);
+  }
+
   return facts.length?facts:[{e:"🎲",t:"Ajoutez des parties pour voir des statistiques !"}];
 }
 
@@ -973,44 +1074,36 @@ function buildFactBatch(allFacts){
 
 function startFeed(){
   if(feedInterval)clearInterval(feedInterval);
-  if(feedBatchInterval)clearInterval(feedBatchInterval);
+  if(feedBatchInterval)clearTimeout(feedBatchInterval);
 
   const allFacts=buildFacts();
   feedFacts=buildFactBatch(allFacts);feedIdx=0;
   renderFeedBlock();
 
-  // Cycle through current 10 facts every 7s
-  if(feedFacts.length>1){
-    feedInterval=setInterval(()=>{
-      const el=document.getElementById("feed-block");
-      if(!el){clearInterval(feedInterval);return;}
-      feedIdx++;
-      if(feedIdx>=feedFacts.length){
-        // Reached end of batch — pause display, wait 5 min then new batch
-        el.classList.add("fade");
-        clearInterval(feedInterval);feedInterval=null;
-        feedBatchInterval=setTimeout(()=>{
-          const allF=buildFacts();
-          feedFacts=buildFactBatch(allF);feedIdx=0;
-          const el2=document.getElementById("feed-block");
-          if(!el2)return;
-          el2.classList.remove("fade");
-          renderFeedBlock();
-          // Restart cycle
-          feedInterval=setInterval(()=>{
-            const e3=document.getElementById("feed-block");
-            if(!e3){clearInterval(feedInterval);return;}
-            feedIdx=(feedIdx+1)%feedFacts.length;
-            e3.classList.add("fade");
-            setTimeout(()=>{renderFeedBlock();e3.classList.remove("fade");},500);
-          },7000);
-        },5*60*1000);
-        return;
-      }
-      el.classList.add("fade");
-      setTimeout(()=>{renderFeedBlock();el.classList.remove("fade");},500);
-    },7000);
+  if(feedFacts.length<=1)return;
+
+  function doTick(){
+    const el=document.getElementById("feed-block");
+    if(!el){clearInterval(feedInterval);return;}
+
+    // End of batch: keep current fact visible, wait 5 min then new batch
+    if(feedIdx>=feedFacts.length-1){
+      clearInterval(feedInterval);feedInterval=null;
+      feedBatchInterval=setTimeout(()=>{
+        const el2=document.getElementById("feed-block");
+        const allF=buildFacts();
+        feedFacts=buildFactBatch(allF);feedIdx=0;
+        if(el2){el2.classList.add("fade");setTimeout(()=>{renderFeedBlock();el2.classList.remove("fade");},500);}
+        feedInterval=setInterval(doTick,7000);
+      },5*60*1000);
+      return;
+    }
+
+    el.classList.add("fade");
+    setTimeout(()=>{feedIdx++;renderFeedBlock();const e=document.getElementById("feed-block");if(e)e.classList.remove("fade");},500);
   }
+
+  feedInterval=setInterval(doTick,7000);
 }
 function renderFeedBlock(){
   const el=document.getElementById("feed-block");
