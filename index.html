@@ -1251,24 +1251,25 @@ function rClass(){
   if(!lb.length){h+=`<div class="empty">AUCUN JOUEUR.</div>`;document.getElementById("pg-classement").innerHTML=h;return}
   lb.forEach((p,i)=>{
     const r=wr(p.victoires,p.parties),bp=Math.round(p.victoires/mx*100),ac=ACCS[i%ACCS.length];
-    const av=p.photo?`<div class="av" style="width:54px;height:54px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:54px;height:54px;background:${p.color};color:#000;font-size:16px">${p.name[0]}</div>`;
-    h+=`<div class="card ac${i%7}">
-      <div style="display:flex;align-items:center;gap:12px">
-        <span style="font-size:22px;width:32px;text-align:center">${med(i)}</span>${av}
-        <div style="flex:1">
-          <div style="font-size:11px;margin-bottom:4px">${p.name}</div>
-          <div style="font-size:7px;color:var(--muted)">${p.jeux} JEUX • ${p.seconds||0}🥈 • ${p.troisiemes||0}🥉</div>
+    const av=p.photo?`<div class="av" style="width:38px;height:38px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:38px;height:38px;background:${p.color};color:#000;font-size:12px">${p.name[0]}</div>`;
+    const rk=getRank(p.points||0);
+    h+=`<div class="card ac${i%7}" style="padding:10px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${med(i)}</span>
+        ${av}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${p.name}</div>
+          <div class="rank-badge ${rk.cls}" style="font-size:5px;padding:2px 5px">${rk.name}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:18px;color:var(--yellow);text-shadow:2px 2px 0 #b07000">${p.victoires}</div>
-          <div style="font-size:7px;color:var(--muted)">VICTOIRES</div>
+        <div style="display:flex;gap:14px;flex-shrink:0;text-align:center">
+          <div><div style="font-size:12px;color:var(--yellow)">${p.victoires}</div><div style="font-size:6px;color:var(--muted)">🏆</div></div>
+          <div><div style="font-size:12px;color:var(--cyan)">${p.points||0}</div><div style="font-size:6px;color:var(--muted)">⭐</div></div>
+          <div><div style="font-size:12px;color:${ac}">${r}%</div><div style="font-size:6px;color:var(--muted)">WIN</div></div>
         </div>
       </div>
-      <div class="barw"><div class="barbg"><div class="barfill" style="width:${bp}%;background:${ac}"></div></div>
-        <span style="font-size:9px;color:${ac};min-width:36px;text-align:right">${r}%</span>
-      </div>
-      <div class="srow">
-        ${[["⚔️",p.parties,"PARTIES"],["🏆",p.victoires,"VICTOIRES"],["⭐",p.points||0,"POINTS"],["📊",r+"%","WIN RATE"]].map(([e,v,l])=>`<div style="text-align:center;min-width:54px"><div class="sv" style="font-size:13px">${e}${v}</div><div class="sl">${l}</div></div>`).join("")}
+      <div class="barw" style="margin-top:7px">
+        <div class="barbg" style="height:6px"><div class="barfill" style="width:${bp}%;background:${ac}"></div></div>
+        <span style="font-size:7px;color:var(--muted);flex-shrink:0">${p.parties}p</span>
       </div>
     </div>`;
   });
@@ -1380,7 +1381,8 @@ function rHisto(){
 }
 
 function getHistoFiltered(){
-  let f=[...feed].reverse(); // newest first
+  // Sort newest first by date, then by id as tiebreaker
+  let f=[...feed].sort((a,b)=>new Date(b.date)-new Date(a.date)||(b.id>a.id?1:-1));
   if(histoPlayerFilter!=="all") f=f.filter(e=>(e.playerIds||[]).includes(histoPlayerFilter));
   if(histoGameFilter!=="all") f=f.filter(e=>e.gameId===histoGameFilter);
   return f;
