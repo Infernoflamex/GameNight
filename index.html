@@ -598,6 +598,13 @@ const COLS=["#f7c948","#ff5f87","#3dffd0","#b57aff","#5b8fff","#ff9f43","#3dff9a
 const ACCS=["#f7c948","#ff5f87","#3dffd0","#b57aff","#5b8fff","#ff9f43","#3dff9a"];
 const MEDALS=["🥇","🥈","🥉"];
 
+// Convert a placement + player count into a 1-4 rank (last place = rank 4)
+function gameRankFor(place, n){
+  if(n<=2) return place===1?1:4;
+  if(n===3) return place===1?1:place===2?2:4;
+  return place===1?1:place===2?2:place===3?3:4;
+}
+
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-T-nqLAI8PXR5vfDE0w6DC3G6_hfp0zw",
@@ -651,8 +658,10 @@ function gt(pid){
     victoires:a.victoires+s.victoires,
     seconds:a.seconds+(s.seconds||0),
     troisiemes:a.troisiemes+(s.troisiemes||0),
-    points:a.points+(s.points||0)
-  }),{parties:0,victoires:0,seconds:0,troisiemes:0,points:0});
+    points:a.points+(s.points||0),
+    rankSum:a.rankSum+(s.rankSum||0),
+    rankCount:a.rankCount+(s.rankCount||0)
+  }),{parties:0,victoires:0,seconds:0,troisiemes:0,points:0,rankSum:0,rankCount:0});
   raw.points=Math.max(0,raw.points); // can't go below 0
   return raw;
 }
@@ -712,10 +721,10 @@ function rbs(){
 
     allPids.forEach(pid=>{
       if(!stats[pid])stats[pid]={};
-      if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0,scoreSum:0,scoreCount:0,scoreMax:null,scoreMin:null};
+      if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0,scoreSum:0,scoreCount:0,scoreMax:null,scoreMin:null,rankSum:0,rankCount:0};
       stats[pid][f.gameId].parties++;
       // Unranked = loser
-      if(!rankedSet.has(pid)) stats[pid][f.gameId].points=(stats[pid][f.gameId].points||0)+ptsFor(999);
+      if(!rankedSet.has(pid)){stats[pid][f.gameId].points=(stats[pid][f.gameId].points||0)+ptsFor(999);stats[pid][f.gameId].rankSum=(stats[pid][f.gameId].rankSum||0)+4;stats[pid][f.gameId].rankCount=(stats[pid][f.gameId].rankCount||0)+1;}
       // Track game scores
       if(scores[pid]!==undefined){
         const sc=parseFloat(scores[pid]);
@@ -729,11 +738,13 @@ function rbs(){
       const pts=ptsFor(r.place);
       r.pids.forEach(pid=>{
         if(!stats[pid])stats[pid]={};
-        if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0,scoreSum:0,scoreCount:0,scoreMax:null,scoreMin:null};
+        if(!stats[pid][f.gameId])stats[pid][f.gameId]={parties:0,victoires:0,seconds:0,troisiemes:0,points:0,scoreSum:0,scoreCount:0,scoreMax:null,scoreMin:null,rankSum:0,rankCount:0};
         if(r.place===1)stats[pid][f.gameId].victoires++;
         if(r.place===2)stats[pid][f.gameId].seconds=(stats[pid][f.gameId].seconds||0)+1;
         if(r.place===3)stats[pid][f.gameId].troisiemes=(stats[pid][f.gameId].troisiemes||0)+1;
         stats[pid][f.gameId].points=(stats[pid][f.gameId].points||0)+pts;
+        stats[pid][f.gameId].rankSum=(stats[pid][f.gameId].rankSum||0)+gameRankFor(r.place,n);
+        stats[pid][f.gameId].rankCount=(stats[pid][f.gameId].rankCount||0)+1;
       });
     });
   });
@@ -1250,7 +1261,7 @@ function rClass(){
 
   if(!lb.length){h+=`<div class="empty">AUCUN JOUEUR.</div>`;document.getElementById("pg-classement").innerHTML=h;return}
   lb.forEach((p,i)=>{
-    const r=wr(p.victoires,p.parties),bp=Math.round(p.victoires/mx*100),ac=ACCS[i%ACCS.length];
+    const r=wr(p.victoires,p.parties),bp=wr(p.victoires,p.parties),ac=ACCS[i%ACCS.length];
     const av=p.photo?`<div class="av" style="width:38px;height:38px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:38px;height:38px;background:${p.color};color:#000;font-size:12px">${p.name[0]}</div>`;
     const rk=getRank(p.points||0);
     h+=`<div class="card ac${i%7}" style="padding:10px 14px;margin-bottom:8px">
@@ -1512,6 +1523,7 @@ function rJoueurs(){
         <div style="text-align:center;min-width:54px"><div class="sv">${tot.victoires}</div><div class="sl">VICTOIRES</div></div>
         <div style="text-align:center;min-width:54px"><div class="sv">${tot.seconds||0}</div><div class="sl">2ÈMES</div></div>
         <div style="text-align:center;min-width:54px"><div class="sv" style="color:var(--cyan)">⭐${tot.points||0}</div><div class="sl">POINTS</div></div>
+        <div style="text-align:center;min-width:54px"><div class="sv" style="color:${tot.rankCount>0?(tot.rankSum/tot.rankCount)<=2?"var(--green)":(tot.rankSum/tot.rankCount)<=3?"var(--yellow)":"var(--pink)":"var(--muted)"}">${tot.rankCount>0?(tot.rankSum/tot.rankCount).toFixed(2):"—"}</div><div class="sl">RANG MOY.</div></div>
       </div>
     </div>`;
   });
@@ -1860,6 +1872,8 @@ function openDetail(gid){
   rows.forEach((r,i)=>{
     if(r.parties===0)return;
     const rate=wr(r.victoires,r.parties),ac=ACCS[i%ACCS.length];
+    const avgRk=r.rankCount>0?(r.rankSum/r.rankCount).toFixed(2):"—";
+    const avgRkColor=r.rankCount>0?(r.rankSum/r.rankCount)<=2?"var(--green)":(r.rankSum/r.rankCount)<=3?"var(--yellow)":"var(--pink)":"var(--muted)";
     const av=r.photo?`<div class="av" style="width:28px;height:28px;border-color:${ac}"><img src="${r.photo}"/></div>`:`<div class="av" style="width:28px;height:28px;background:${r.color||"#888"};color:#000;font-size:9px">${r.name[0]}</div>`;
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px;width:24px">${med(i)}</span>${av}<span style="font-size:8px">${r.name}</span></div>
@@ -1869,6 +1883,7 @@ function openDetail(gid){
         <span style="color:var(--cyan)">${r.seconds||0}🥈</span>
         <span style="color:var(--orange)">⭐${Math.max(0,r.points||0)}</span>
         <span style="color:${rate>=50?"var(--green)":"var(--muted)"}">${rate}%</span>
+        <span style="color:${avgRkColor}" title="Rang moyen (1=meilleur, 4=dernier)">📊${avgRk}</span>
       </div>
     </div>`;
   });
@@ -2185,7 +2200,7 @@ function rStats(){
     if(!stSelPlayers.length)stSelPlayers=players.slice(0,3).map(p=>p.id);
   }
 
-  const metricLabels={points:"⭐ POINTS CUMULÉS",victoires:"🏆 VICTOIRES CUMULÉES",parties:"🎮 PARTIES JOUÉES"};
+  const metricLabels={points:"⭐ POINTS CUMULÉS",victoires:"🏆 VICTOIRES CUMULÉES",parties:"🎮 PARTIES JOUÉES",avgRank:"📊 RANG MOYEN (1=meilleur)"};
   const allPlayedGames=ag().filter(g=>feed.some(f=>f.gameId===g.id));
 
   const h=`<div class="stitle">📊 STATISTIQUES</div>
@@ -2198,6 +2213,7 @@ function rStats(){
         <button class="sfbtn${stMetric==="points"?" on":""}" onclick="stSetMetric('points')">⭐ POINTS</button>
         <button class="sfbtn${stMetric==="victoires"?" on":""}" onclick="stSetMetric('victoires')">🏆 VICTOIRES</button>
         <button class="sfbtn${stMetric==="parties"?" on":""}" onclick="stSetMetric('parties')">🎮 PARTIES</button>
+        <button class="sfbtn${stMetric==="avgRank"?" on":""}" onclick="stSetMetric('avgRank')">📊 RANG MOY.</button>
         <button class="sfbtn${stShowLabels?" on":""}" onclick="stToggleLabels()" style="margin-left:auto;${stShowLabels?"border-color:var(--yellow);color:var(--yellow)":""}">🏷 NOMS</button>
       </div>
 
@@ -2328,11 +2344,24 @@ function drawStatsChart(){
   const seriesList=stSelPlayers.map((pid,idx)=>{
     const p=players.find(x=>x.id===pid);
     const color=ST_COLORS[idx%ST_COLORS.length];
-    const vals=[0];const dates=["START"];
-    let cum=0;
+    const vals=[stMetric==="avgRank"?2.5:0];const dates=["START"];
+    let cum=0,rankTotal=0,rankGames=0;
     entries.forEach(f=>{
       const played=(f.playerIds||[]).includes(pid);
-      if(!played){vals.push(cum);dates.push(fd(f.date));return;}
+      if(!played){
+        if(stMetric==="avgRank"){vals.push(rankGames>0?parseFloat((rankTotal/rankGames).toFixed(2)):2.5);}
+        else vals.push(cum);
+        dates.push(fd(f.date));return;
+      }
+      if(stMetric==="avgRank"){
+        const n2=(f.playerIds||[]).length;
+        const rnk=getRankings(f);
+        const rankedSet=new Set(rnk.flatMap(r=>r.pids));
+        let place=999;
+        if(rankedSet.has(pid)){const r=rnk.find(r=>r.pids.includes(pid));if(r)place=r.place;}
+        rankTotal+=gameRankFor(place,n2);rankGames++;
+        vals.push(parseFloat((rankTotal/rankGames).toFixed(2)));dates.push(fd(f.date));return;
+      }
       if(stMetric==="parties"){cum++;vals.push(cum);dates.push(fd(f.date));return;}
       if(stMetric==="victoires"){
         const rnk=getRankings(f);
@@ -2358,12 +2387,19 @@ function drawStatsChart(){
   for(let i=0;i<numPts;i+=step)xTicks.push(i);
   if(!xTicks.includes(numPts-1))xTicks.push(numPts-1);
 
-  let maxY=0;
-  seriesList.forEach(s=>s.vals.forEach(v=>{if(v>maxY)maxY=v;}));
-  maxY=Math.max(maxY,5);
-  const yStep=maxY<=10?1:maxY<=30?5:maxY<=100?10:maxY<=300?25:50;
-  const yMax=Math.ceil(maxY/yStep)*yStep;
-  const yTicks=[];for(let y=0;y<=yMax;y+=yStep)yTicks.push(y);
+  const isRankMetric=stMetric==="avgRank";
+  let yMin=0,yMax,yTicks=[],yStep;
+  if(isRankMetric){
+    yMin=1;yMax=4;yStep=1;
+    for(let y=1;y<=4;y++)yTicks.push(y);
+  } else {
+    let maxY=0;
+    seriesList.forEach(s=>s.vals.forEach(v=>{if(v>maxY)maxY=v;}));
+    maxY=Math.max(maxY,5);
+    yStep=maxY<=10?1:maxY<=30?5:maxY<=100?10:maxY<=300?25:50;
+    yMax=Math.ceil(maxY/yStep)*yStep;
+    for(let y=0;y<=yMax;y+=yStep)yTicks.push(y);
+  }
 
   // Canvas setup
   const dpr=window.devicePixelRatio||1;
@@ -2377,7 +2413,9 @@ function drawStatsChart(){
   const W=cssW-PAD.left-PAD.right;const H=cssH-PAD.top-PAD.bottom;
 
   const cx=(i)=>PAD.left+(i/(numPts-1||1))*W;
-  const cy=(v)=>PAD.top+H-(v/yMax)*H;
+  const cy=(v)=>isRankMetric
+    ?PAD.top+((v-yMin)/(yMax-yMin))*H   // rank 1 at top, rank 4 at bottom
+    :PAD.top+H-(v/yMax)*H;
 
   // Background
   ctx.fillStyle="#0d0d1a";ctx.fillRect(0,0,cssW,cssH);
@@ -2389,7 +2427,10 @@ function drawStatsChart(){
   // Y labels
   ctx.fillStyle="#555";ctx.textAlign="right";
   ctx.font=`${Math.round(6*dpr)/dpr}px 'Press Start 2P',monospace`;
-  yTicks.forEach(y=>ctx.fillText(y,PAD.left-5,cy(y)+3));
+  yTicks.forEach(y=>{
+    const label=isRankMetric?(y===1?"🥇"+y:y===4?"💀"+y:String(y)):String(y);
+    ctx.fillText(label,PAD.left-5,cy(y)+3);
+  });
 
   // X labels (date, abbreviated)
   ctx.fillStyle="#555";ctx.textAlign="center";
@@ -2466,10 +2507,11 @@ function setupChartHover(canvas){
 
     const rows=seriesList.map(s=>{
       const v=clampedI<s.vals.length?s.vals[clampedI]:s.vals[s.vals.length-1];
+      const disp=(stMetric==="avgRank"&&typeof v==="number")?v.toFixed(2):v;
       return`<div style="display:flex;align-items:center;gap:6px;padding:1px 0">
         <div style="width:16px;height:2px;background:${s.color};flex-shrink:0"></div>
         <span style="color:${s.color};flex:1">${s.name}</span>
-        <span style="color:var(--white);margin-left:8px;font-size:8px">${v}</span>
+        <span style="color:var(--white);margin-left:8px;font-size:8px">${disp}</span>
       </div>`;
     }).join("");
 
