@@ -232,6 +232,8 @@ select option{background:var(--bg2)}
 .badge-item{display:flex;align-items:flex-start;gap:10px;padding:10px;background:var(--bg3);border:2px solid var(--border);margin-bottom:6px}
 .badge-item.unlocked{border-color:var(--yellow);background:rgba(247,201,72,.06)}
 .badge-item.locked{opacity:.45}
+.badge-tooltip{position:fixed;z-index:9999;pointer-events:none;background:var(--bg2);border:2px solid var(--yellow);box-shadow:4px 4px 0 rgba(247,201,72,.4);padding:10px 12px;min-width:160px;max-width:220px;display:none;font-family:'Press Start 2P',monospace}
+.badge-tooltip.show{display:block}
 
 @keyframes badgepop{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
 .badge-icon.unlocked{animation:badgepop .35s ease}
@@ -280,6 +282,8 @@ select option{background:var(--bg2)}
 </div>
 
 <!-- LIGHTBOX -->
+<div id="badge-tooltip" class="badge-tooltip"></div>
+
 <div id="lb" onclick="document.getElementById('lb').style.display='none'">
   <img id="lbimg" src="" alt=""/>
   <div id="lb-hint">CLIQUER POUR FERMER</div>
@@ -771,9 +775,76 @@ function computeBadges(pid){
   return BADGES.map(b=>({...b,unlocked:unlocked.has(b.id)}));
 }
 
+function computeBadgeUnlockDates(pid){
+  const dates={};
+  const chrono=[...feed].sort(feedSortAsc).filter(f=>(f.playerIds||[]).includes(pid));
+  let streak=0; const gameStreak={}; const dayWins={}; const gameLastResult={};
+  let lastPlaceCount=0,wins=0,parties=0,seconds=0,thirds=0,pts=0;
+  const winsPerGame={};const playedWith=new Set();
+
+  function setDate(id){if(!dates[id]&&f.date)dates[id]=f.date;}
+  let f; // set in loop
+
+  chrono.forEach(fe=>{
+    f=fe;
+    const n=(f.playerIds||[]).length;
+    const rnk=getRankings(f);
+    const rankedSet=new Set(rnk.flatMap(r=>r.pids));
+    let place=n;
+    if(rankedSet.has(pid)){const r=rnk.find(r=>r.pids.includes(pid));if(r)place=r.place;}
+    const grank=gameRankFor(place,n);
+    const isWin=place===1; const isLast=grank===4;
+
+    parties++;
+    if(place===2)seconds++;
+    if(place===3)thirds++;
+    const ptsF=(pl)=>n<=2?pl===1?1:-1:n===3?pl===1?2:pl===2?1:-1:pl===1?3:pl===2?2:pl===3?1:-1;
+    pts+=ptsF(place);
+
+    if(isWin){streak++;winsPerGame[f.gameId]=(winsPerGame[f.gameId]||0)+1;wins++;dayWins[f.date]=(dayWins[f.date]||0)+1;}else{streak=0;}
+    if(isWin){gameStreak[f.gameId]=(gameStreak[f.gameId]||0)+1;}else{gameStreak[f.gameId]=0;}
+    if(isLast)lastPlaceCount++;
+    if(isWin&&gameLastResult[f.gameId]==="last")setDate("comeback");
+    gameLastResult[f.gameId]=isLast?"last":"other";
+    (f.playerIds||[]).forEach(id=>{if(id!==pid)playedWith.add(id);});
+
+    if(streak>=3)setDate("streak3");
+    if(streak>=5)setDate("streak5");
+    if(streak>=10)setDate("streak10");
+    if((gameStreak[f.gameId]||0)>=3)setDate("hatrick");
+    if((dayWins[f.date]||0)>=3)setDate("perfectday");
+    if(wins>=10)setDate("wins10");
+    if(wins>=50)setDate("wins50");
+    if(parties>=50)setDate("games50");
+    if(parties>=100)setDate("games100");
+    if(parties>=10&&wr(wins,parties)>=60)setDate("wr60");
+    if(Math.max(0,pts)>=100)setDate("pts100");
+    if(seconds>=20)setDate("second20");
+    if(thirds>=20)setDate("third20");
+    if(lastPlaceCount>=20)setDate("lastplace20");
+    const wg=Object.values(winsPerGame).filter(v=>v>0).length;
+    if(wg>=5)setDate("poly5");
+    if(wg>=10)setDate("poly10");
+    if(Object.values(winsPerGame).some(v=>v>=10))setDate("domgame");
+    const allOthers=players.filter(p=>p.id!==pid);
+    if(allOthers.length>0&&allOthers.every(p=>playedWith.has(p.id)))setDate("allplayers");
+    // highscore: check after this match
+    ag().forEach(g=>{
+      const allRows=players.map(p=>stats[p.id]?.[g.id]).filter(Boolean).filter(s=>s.scoreCount>0);
+      if(!allRows.length)return;
+      const myScore=stats[pid]?.[g.id];
+      if(!myScore||myScore.scoreCount===0)return;
+      const globalMax=Math.max(...allRows.map(s=>s.scoreMax));
+      if(myScore.scoreMax>=globalMax)setDate("highscore");
+    });
+  });
+  return dates;
+}
+
 function renderBadgeGrid(pid){
   const p=players.find(x=>x.id===pid);
   const pinned=p?.pinnedBadges||[];
+  const unlockDates=computeBadgeUnlockDates(pid);
   const badges=computeBadges(pid);
   return badges.map(b=>{
     const isPinned=pinned.includes(b.id);
@@ -783,7 +854,7 @@ function renderBadgeGrid(pid){
       <div style="flex:1">
         <div style="font-size:7px;color:${b.unlocked?"var(--yellow)":"var(--muted)"};letter-spacing:1px;margin-bottom:3px">${b.name}</div>
         <div style="font-size:6px;color:var(--muted);line-height:1.8">${b.desc}</div>
-        ${b.unlocked?`<div style="font-size:6px;color:${isPinned?"var(--cyan)":"var(--green)"};margin-top:3px;letter-spacing:1px">${isPinned?"📌 ÉPINGLÉ":"✓ DÉBLOQUÉ"}</div>`:`<div style="font-size:6px;color:var(--border);margin-top:3px">🔒 VERROUILLÉ</div>`}
+        ${b.unlocked?`<div style="font-size:6px;color:${isPinned?"var(--cyan)":"var(--green)"};margin-top:3px;letter-spacing:1px">${isPinned?"📌 ÉPINGLÉ":"✓ DÉBLOQUÉ"}${unlockDates[b.id]?` — <span style="color:var(--muted)">${fd(unlockDates[b.id])}</span>`:""}</div>`:`<div style="font-size:6px;color:var(--border);margin-top:3px">🔒 VERROUILLÉ</div>`}
       </div>
       ${b.unlocked?`<div style="font-size:7px;color:${isPinned?"var(--cyan)":"var(--border)"};flex-shrink:0;font-size:16px">${isPinned?"📌":"○"}</div>`:""}
     </div>`;
@@ -987,7 +1058,7 @@ function pgallLoadMore(){
 // Render a photo strip (1 row) + "Voir tout" button
 function photoStrip(photos, label){
   if(!photos.length)return"";
-  const ROW=5;
+  const ROW=10;
   const strip=photos.slice(0,ROW).map(src=>`<img src="${src}" loading="lazy" onclick="lb('${src}')" style="width:100%;aspect-ratio:1;object-fit:cover;border:2px solid var(--border);cursor:pointer" />`).join("");
   const moreBtn=photos.length>ROW?`<button class="see-more-btn" onclick='openPGall(${JSON.stringify(photos)})'>📸 VOIR TOUT (${photos.length})</button>`:"";
   return`<div>
@@ -1338,7 +1409,7 @@ function rAccueil(){
   const lb2=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.points-a.points||b.victoires-a.victoires);
   const recent=[...feed].sort(feedSortDesc).slice(0,6);
   const allpho=[];feed.forEach(f=>(f.photos||[]).forEach(ph=>allpho.push({src:ph})));
-  const photos=allpho.slice(0,12);
+  const photos=allpho.slice(0,20);
   // Correct counts
   const gameCounts={};feed.forEach(f=>{ gameCounts[f.gameId]=(gameCounts[f.gameId]||0)+1; });
   const totG=Object.keys(gameCounts).length;
@@ -1401,14 +1472,18 @@ function rAccueil(){
       <div class="hpanel-body">
       ${recent.length===0?`<div style="color:var(--muted);font-size:8px;text-align:center;padding:16px">AUCUNE PARTIE</div>`:
       recent.slice(0,5).map(f=>{
-        const game=gg(f.gameId);const wid=getWinner(f);const winner=players.find(p=>p.id===wid);
+        const game=gg(f.gameId);
+        const rnk=getRankings(f);
+        const firstPlace=rnk.find(r=>r.place===1);
+        const winners=(firstPlace?.pids||[]).map(id=>players.find(p=>p.id===id)).filter(Boolean);
+        const winnersHtml=winners.map(w=>`<span style="color:${w.color||"var(--green)"};">${w.name}</span>`).join(`<span style="color:var(--muted)"> & </span>`);
         return`<div class="hpanel-row" style="padding:6px 0;gap:8px">
           <span style="font-size:16px;flex-shrink:0">${game?.emoji||"🎲"}</span>
           <div style="flex:1;min-width:0">
             <div style="font-size:7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${game?.name||f.gameId}</div>
             <div style="font-size:7px;color:var(--muted);margin-top:2px">${fd(f.date)}</div>
           </div>
-          ${winner?`<span style="font-size:7px;color:var(--green);flex-shrink:0">🏆${winner.name}</span>`:""}
+          ${winners.length?`<span style="font-size:7px;flex-shrink:0">🏆${winnersHtml}</span>`:""}
         </div>`;
       }).join("")}
       </div>
@@ -1449,9 +1524,10 @@ function rClass(){
     winrate:(a,b)=>wr(b.victoires,b.parties)-wr(a.victoires,a.parties)||b.points-a.points||b.parties-a.parties,
     parties:(a,b)=>b.parties-a.parties||b.victoires-a.victoires,
     points:(a,b)=>b.points-a.points||b.victoires-a.victoires,
-    jeux:(a,b)=>b.jeux-a.jeux||b.victoires-a.victoires
+    jeux:(a,b)=>b.jeux-a.jeux||b.victoires-a.victoires,
+    avgRank:(a,b)=>{const ar=(p)=>p.rankCount>0?p.rankSum/p.rankCount:99;return ar(a)-ar(b)||b.parties-a.parties;}
   };
-  const sortLabels={victoires:"VICTOIRES",points:"POINTS",winrate:"WIN RATE",parties:"PARTIES",jeux:"JEUX DIFF."};
+  const sortLabels={victoires:"VICTOIRES",points:"POINTS",winrate:"WIN RATE",parties:"PARTIES",jeux:"JEUX DIFF.",avgRank:"RANG MOY."};
   const lb=players.map(p=>{
     const tot=gt(p.id);
     const jeux=Object.keys(stats[p.id]||{}).filter(g=>(stats[p.id][g]?.parties||0)>0).length;
@@ -1469,8 +1545,14 @@ function rClass(){
     const r=wr(p.victoires,p.parties),bp=wr(p.victoires,p.parties),ac=ACCS[i%ACCS.length];
     const av=p.photo?`<div class="av" style="width:38px;height:38px;border-color:${ac}"><img src="${p.photo}"/></div>`:`<div class="av" style="width:38px;height:38px;background:${p.color};color:#000;font-size:12px">${p.name[0]}</div>`;
     const rk=getRank(p.points||0);
-    h+=`<div class="card ac${i%7}" style="padding:10px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:10px">
+    const avgRkVal=p.rankCount>0?(p.rankSum/p.rankCount).toFixed(2):"—";
+    const avgRkColor=p.rankCount>0?(p.rankSum/p.rankCount)<=2?"var(--green)":(p.rankSum/p.rankCount)<=3?"var(--yellow)":"var(--pink)":"var(--muted)";
+    let topBgStyle="";
+    if(p.cardBgImg)topBgStyle=`background-image:url(${p.cardBgImg});background-size:cover;background-position:center;`;
+    else if(p.cardBgColor)topBgStyle=`background-color:${p.cardBgColor};`;
+    h+=`<div class="card ac${i%7}" style="padding:10px 14px;margin-bottom:8px;${topBgStyle}">
+      ${topBgStyle?`<div style="position:absolute;inset:0;background:rgba(13,13,26,.78);z-index:0"></div>`:""}
+      <div style="position:relative;z-index:1;display:flex;align-items:center;gap:10px">
         <span style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${med(i)}</span>
         ${av}
         <div style="flex:1;min-width:0">
@@ -1489,10 +1571,11 @@ function rClass(){
           `:classSort==="jeux"?`
             <div><div style="font-size:11px;color:var(--purple)">${p.jeux}</div><div style="font-size:6px;color:var(--muted)">JEUX</div></div>
           `:""}
+          ${classSort==="avgRank"?`<div><div style="font-size:11px;color:${avgRkColor}">${avgRkVal}</div><div style="font-size:6px;color:var(--muted)">RANG</div></div>`:""}
           <div><div style="font-size:11px;color:${ac}">${r}%</div><div style="font-size:6px;color:var(--muted)">WIN</div></div>
         </div>
       </div>
-      <div class="barw" style="margin-top:7px">
+      <div class="barw" style="margin-top:7px;position:relative;z-index:1">
         <div class="barbg" style="height:6px"><div class="barfill" style="width:${bp}%;background:${ac}"></div></div>
         <span style="font-size:7px;color:var(--muted);flex-shrink:0">${p.parties}p</span>
       </div>
@@ -1730,8 +1813,8 @@ function rJoueurs(){
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">
             <div style="font-size:12px">${p.name}</div>
-            <div style="display:flex;align-items:center;gap:4px">
-              ${(p.pinnedBadges||[]).map(bid=>{const b=BADGES.find(x=>x.id===bid);return b?`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}" style="width:34px;height:34px;font-size:20px">${b.emoji}</div>`:""}).join("")}
+            <div style="display:flex;align-items:center;gap:10px">
+              ${(p.pinnedBadges||[]).map(bid=>{const b=BADGES.find(x=>x.id===bid);return b?`<div class="badge-icon unlocked" style="width:34px;height:34px;font-size:20px" onmouseenter="showBadgeTip(this,'${bid}')" onmouseleave="hideBadgeTip()">${b.emoji}</div>`:""}).join("")}
               <button class="ebtn" onclick="openEP('${p.id}')">✏️</button>
               ${isAdmin()?`<button class="dbtn" style="font-size:16px" onclick="delPlayer('${p.id}')">🗑️</button>`:""}
             </div>
@@ -2434,7 +2517,7 @@ function rStats(){
       </div>
       <!-- Time filter -->
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-        ${[["all","TOUT"],["week","SEMAINE"],["month","MOIS"],["year","ANNÉE"],["20","20 DERN."],["50","50 DERN."],["100","100 DERN."]].map(([k,v])=>`<button class="sfbtn${stTimeFilter===k?" on":""}" onclick="stSetTime('${k}')" style="font-size:6px;padding:4px 8px">${v}</button>`).join("")}
+        ${[["all","TOUT"],["week","SEMAINE"],["month","MOIS"],["year","ANNÉE"],["20","20 DERN."],["50","50 DERN."],["100","100 DERN."]].map(([k,v])=>`<button class="sfbtn${stTimeFilter===k?" on":""}" data-time="${k}" onclick="stSetTime('${k}')" style="font-size:6px;padding:4px 8px">${v}</button>`).join("")}
       </div>
 
       <!-- Chart box -->
@@ -2540,7 +2623,14 @@ function stTogglePlayer(id){
 function stSetGame(id){stSelGame=id;stUpdatePanels();drawStatsChart();}
 function stToggleVs(){stVsOnly=!stVsOnly;rStats();}
 function stSetMetric(m){stMetric=m;rStats();}
-function stSetTime(t){stTimeFilter=t;drawStatsChart();}
+function stSetTime(t){
+  stTimeFilter=t;
+  // Update button active states without re-rendering full tab
+  document.querySelectorAll("#pg-stats .sfbtn[data-time]").forEach(b=>{
+    b.classList.toggle("on",b.dataset.time===t);
+  });
+  drawStatsChart();
+}
 function stToggleLabels(){stShowLabels=!stShowLabels;drawStatsChart();}
 
 function drawStatsChart(){
@@ -2762,6 +2852,27 @@ function setupChartHover(canvas){
   canvas.ontouchmove=e=>{e.preventDefault();onMove(e);};
 }
 
+// ── BADGE TOOLTIP ─────────────────────────────────────────────────────────────
+function showBadgeTip(el, bid){
+  const b=BADGES.find(x=>x.id===bid);if(!b)return;
+  const unlocked=players.filter(p=>computeBadges(p.id).find(x=>x.id===bid&&x.unlocked));
+  const pct=players.length>0?Math.round(unlocked.length/players.length*100):0;
+  const tip=document.getElementById("badge-tooltip");
+  if(!tip)return;
+  tip.innerHTML=`<div style="font-size:9px;margin-bottom:6px">${b.emoji} <span style="color:var(--yellow)">${b.name}</span></div>
+    <div style="font-size:7px;color:var(--muted);line-height:1.8;margin-bottom:8px">${b.desc}</div>
+    <div style="font-size:6px;color:var(--cyan)">👥 ${pct}% des joueurs</div>`;
+  tip.classList.add("show");
+  const rect=el.getBoundingClientRect();
+  let left=rect.right+8, top=rect.top;
+  const tw=tip.offsetWidth||180;
+  if(left+tw>window.innerWidth-8)left=rect.left-tw-8;
+  if(top+tip.offsetHeight>window.innerHeight-8)top=window.innerHeight-tip.offsetHeight-8;
+  tip.style.left=Math.max(4,left)+"px";
+  tip.style.top=Math.max(4,top)+"px";
+}
+function hideBadgeTip(){const tip=document.getElementById("badge-tooltip");if(tip)tip.classList.remove("show");}
+
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 const ADMIN_KEY="gn_admin_v1";
 function isAdmin(){try{return localStorage.getItem(ADMIN_KEY)==="yes";}catch(e){return false;}}
@@ -2769,7 +2880,7 @@ function adminLogin(){
   const pw=prompt("🔐 MOT DE PASSE ADMIN:");
   if(pw===null)return;
   // Change "VOTRE_MOT_DE_PASSE" below to your actual password
-  if(pw==="riftleRiotTopaz"){try{localStorage.setItem(ADMIN_KEY,"yes");}catch(e){}alert("✓ Connecté en mode admin.");rAll();}
+  if(pw==="VOTRE_MOT_DE_PASSE"){try{localStorage.setItem(ADMIN_KEY,"yes");}catch(e){}alert("✓ Connecté en mode admin.");rAll();}
   else{alert("❌ Mot de passe incorrect.");}
 }
 function adminLogout(){try{localStorage.removeItem(ADMIN_KEY);}catch(e){}rAll();}
@@ -2852,10 +2963,16 @@ function cropConfirm(){
   const scaleY=img.naturalHeight/ih;
   const sx=Math.max(0,(fx-ix)*scaleX);
   const sy=Math.max(0,(fy-iy)*scaleY);
-  const sw=Math.min(fw*scaleX,img.naturalWidth-sx);
-  const sh=Math.min(fh*scaleY,img.naturalHeight-sy);
-  const outW=_cropShape==="banner"?768:256;
-  const outH=_cropShape==="banner"?200:256;
+  let sw=Math.min(fw*scaleX,img.naturalWidth-sx);
+  let sh=Math.min(fh*scaleY,img.naturalHeight-sy);
+  // Enforce output aspect ratio on source to prevent distortion
+  const targetAR=outW/outH;
+  if(sw/sh>targetAR){sw=sh*targetAR;}
+  else{sh=sw/targetAR;}
+  sw=Math.min(sw,img.naturalWidth-sx);
+  sh=Math.min(sh,img.naturalHeight-sy);
+  const outW=_cropShape==="banner"?960:512;
+  const outH=_cropShape==="banner"?320:512;
   const cnv=document.createElement("canvas");cnv.width=outW;cnv.height=outH;
   const ctx2=cnv.getContext("2d");
   ctx2.drawImage(img,sx,sy,sw,sh,0,0,outW,outH);
