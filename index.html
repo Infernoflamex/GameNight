@@ -223,6 +223,19 @@ select option{background:var(--bg2)}
 .card{position:relative;overflow:hidden}
 .card>*{position:relative;z-index:1}
 
+/* BADGES */
+.badge-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:2px solid var(--border);background:var(--bg3);font-size:14px;cursor:pointer;position:relative;transition:.1s;flex-shrink:0}
+.badge-icon:hover{border-color:var(--yellow);transform:scale(1.1)}
+.badge-icon.locked{opacity:.25;filter:grayscale(1)}
+.badge-icon.unlocked{border-color:var(--yellow);box-shadow:0 0 8px rgba(247,201,72,.5)}
+.badge-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.badge-item{display:flex;align-items:flex-start;gap:10px;padding:10px;background:var(--bg3);border:2px solid var(--border);margin-bottom:6px}
+.badge-item.unlocked{border-color:var(--yellow);background:rgba(247,201,72,.06)}
+.badge-item.locked{opacity:.45}
+
+@keyframes badgepop{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+.badge-icon.unlocked{animation:badgepop .35s ease}
+
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .25s ease}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
@@ -415,6 +428,10 @@ select option{background:var(--bg2)}
       </div>
     </div>
   </div>
+  <div id="p-badges-section" class="fg" style="display:none">
+    <label class="lbl" style="color:var(--yellow)">🏅 BADGES DÉBLOQUÉS</label>
+    <div id="p-badges-grid" style="margin-top:6px"></div>
+  </div>
   <div class="brow"><button class="bg" onclick="cm('pModal')">ANNULER</button><button class="bp" id="pSubmitBtn" onclick="submitPlayer()">AJOUTER</button></div>
  </div>
 </div>
@@ -603,6 +620,144 @@ function gameRankFor(place, n){
   if(n<=2) return place===1?1:4;
   if(n===3) return place===1?1:place===2?2:4;
   return place===1?1:place===2?2:place===3?3:4;
+}
+
+// ── BADGE SYSTEM ──────────────────────────────────────────────────────────────
+const BADGES=[
+  {id:"streak3",   emoji:"🔥", name:"En Feu",          desc:"3 victoires consécutives"},
+  {id:"streak5",   emoji:"⚡", name:"Fulgurant",        desc:"5 victoires consécutives"},
+  {id:"streak10",  emoji:"💫", name:"Intouchable",      desc:"10 victoires consécutives"},
+  {id:"wins10",    emoji:"🏆", name:"First Blood",      desc:"10 victoires au total"},
+  {id:"wins50",    emoji:"🦾", name:"Dominateur",       desc:"50 victoires au total"},
+  {id:"games50",   emoji:"🎲", name:"Vétéran",          desc:"50 parties jouées"},
+  {id:"games100",  emoji:"🏛️", name:"Légende Vivante",  desc:"100 parties jouées"},
+  {id:"wr60",      emoji:"🎯", name:"Tireur d'Élite",   desc:"60%+ de victoires (min 10 parties)"},
+  {id:"pts100",    emoji:"⭐", name:"Centurion",         desc:"Atteindre 100 points"},
+  {id:"poly5",     emoji:"🌈", name:"Touche-à-Tout",    desc:"Victoires sur 5 jeux différents"},
+  {id:"poly10",    emoji:"🌍", name:"Expert Mondial",   desc:"Victoires sur 10 jeux différents"},
+  {id:"domgame",   emoji:"💎", name:"Maître du Jeu",    desc:"10 victoires sur un même jeu"},
+  {id:"hatrick",   emoji:"🎩", name:"Hat-Trick",        desc:"3 victoires de suite sur le même jeu"},
+  {id:"second20",  emoji:"🥈", name:"Éternel Dauphin",  desc:"20 deuxièmes places au total"},
+  {id:"third20",   emoji:"🥉", name:"Médaillé de Bronze",desc:"20 troisièmes places au total"},
+  {id:"comeback",  emoji:"🚀", name:"Comeback Kid",     desc:"Gagner après avoir été dernier (même jeu)"},
+  {id:"perfectday",emoji:"☀️", name:"Journée Parfaite", desc:"3 victoires le même jour"},
+  {id:"highscore", emoji:"🔺", name:"Record Man",       desc:"Détenir un record de score dans un jeu"},
+  {id:"allplayers",emoji:"🤝", name:"Camarade",         desc:"Jouer avec tous les joueurs inscrits"},
+  {id:"lastplace20",emoji:"💀",name:"Souffre-Douleur",  desc:"20 dernières places (courage !)"},
+];
+
+function computeBadges(pid){
+  const unlocked=new Set();
+  const chronoGames=[...feed]
+    .sort((a,b)=>new Date(a.date)-new Date(b.date)||(Number(a.id)-Number(b.id)))
+    .filter(f=>(f.playerIds||[]).includes(pid));
+
+  // win streak (overall consecutive)
+  let streak=0,maxStreak=0;
+  // hat-trick: consecutive wins per game
+  const gameStreak={};
+  // same-day wins
+  const dayWins={};
+  // last-place tracking for comeback
+  const gameLastResult={};
+  let lastPlaceCount=0;
+
+  chronoGames.forEach(f=>{
+    const n=(f.playerIds||[]).length;
+    const rnk=getRankings(f);
+    const rankedSet=new Set(rnk.flatMap(r=>r.pids));
+    let place=n; // default = last
+    if(rankedSet.has(pid)){const r=rnk.find(r=>r.pids.includes(pid));if(r)place=r.place;}
+    const grank=gameRankFor(place,n);
+    const isWin=place===1;
+    const isLast=grank===4;
+
+    // Overall streak
+    if(isWin){streak++;if(streak>maxStreak)maxStreak=streak;}else{streak=0;}
+
+    // Hat-trick (per game consecutive wins)
+    if(isWin){gameStreak[f.gameId]=(gameStreak[f.gameId]||0)+1;}
+    else{gameStreak[f.gameId]=0;}
+    if((gameStreak[f.gameId]||0)>=3)unlocked.add("hatrick");
+
+    // Same-day wins
+    if(isWin){dayWins[f.date]=(dayWins[f.date]||0)+1;if(dayWins[f.date]>=3)unlocked.add("perfectday");}
+
+    // Comeback: player was last in their previous game on this game, now wins
+    if(isWin&&gameLastResult[f.gameId]==="last")unlocked.add("comeback");
+    gameLastResult[f.gameId]=isLast?"last":"other";
+
+    // Last place count
+    if(isLast)lastPlaceCount++;
+  });
+
+  // Streaks
+  if(maxStreak>=3) unlocked.add("streak3");
+  if(maxStreak>=5) unlocked.add("streak5");
+  if(maxStreak>=10)unlocked.add("streak10");
+  if(lastPlaceCount>=20)unlocked.add("lastplace20");
+
+  // Aggregated stats
+  const tot=gt(pid);
+  if(tot.victoires>=10) unlocked.add("wins10");
+  if(tot.victoires>=50) unlocked.add("wins50");
+  if(tot.parties>=50)   unlocked.add("games50");
+  if(tot.parties>=100)  unlocked.add("games100");
+  if(tot.parties>=10&&wr(tot.victoires,tot.parties)>=60) unlocked.add("wr60");
+  if((tot.points||0)>=100) unlocked.add("pts100");
+  if((tot.seconds||0)>=20) unlocked.add("second20");
+  if((tot.troisiemes||0)>=20) unlocked.add("third20");
+
+  // Wins on different games
+  const winsPerGame=Object.entries(stats[pid]||{}).filter(([,g])=>g.victoires>0);
+  if(winsPerGame.length>=5)  unlocked.add("poly5");
+  if(winsPerGame.length>=10) unlocked.add("poly10");
+
+  // 10 wins on same game
+  if(winsPerGame.some(([,g])=>g.victoires>=10)) unlocked.add("domgame");
+
+  // Highscore: player holds the current record high on any game
+  ag().forEach(g=>{
+    const allRows=players.map(p=>stats[p.id]?.[g.id]).filter(Boolean).filter(s=>s.scoreCount>0);
+    if(!allRows.length)return;
+    const myScore=stats[pid]?.[g.id];
+    if(!myScore||myScore.scoreCount===0)return;
+    const globalMax=Math.max(...allRows.map(s=>s.scoreMax));
+    if(myScore.scoreMax>=globalMax)unlocked.add("highscore");
+  });
+
+  // Played with all registered players
+  if(players.length>=2){
+    const playedWith=new Set();
+    feed.filter(f=>(f.playerIds||[]).includes(pid))
+      .forEach(f=>(f.playerIds||[]).forEach(id=>{if(id!==pid)playedWith.add(id);}));
+    const allOthers=players.filter(p=>p.id!==pid);
+    if(allOthers.length>0&&allOthers.every(p=>playedWith.has(p.id))) unlocked.add("allplayers");
+  }
+
+  return BADGES.map(b=>({...b,unlocked:unlocked.has(b.id)}));
+}
+
+function renderBadgeGrid(pid){
+  const badges=computeBadges(pid);
+  return badges.map(b=>`
+    <div class="badge-item ${b.unlocked?"unlocked":"locked"}">
+      <div style="font-size:22px;flex-shrink:0">${b.emoji}</div>
+      <div>
+        <div style="font-size:7px;color:${b.unlocked?"var(--yellow)":"var(--muted)"};letter-spacing:1px;margin-bottom:3px">${b.name}</div>
+        <div style="font-size:6px;color:var(--muted);line-height:1.8">${b.desc}</div>
+        ${b.unlocked?`<div style="font-size:6px;color:var(--green);margin-top:3px;letter-spacing:1px">✓ DÉBLOQUÉ</div>`:`<div style="font-size:6px;color:var(--border);margin-top:3px">🔒 VERROUILLÉ</div>`}
+      </div>
+    </div>`).join("");
+}
+
+function renderBadgeIcons(pid, max=3){
+  const badges=computeBadges(pid).filter(b=>b.unlocked);
+  if(!badges.length) return "";
+  return`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">`
+    +badges.slice(0,max).map(b=>`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}">${b.emoji}</div>`).join("")
+    +(badges.length>max?`<div class="badge-icon unlocked" title="${badges.length-max} autres badges" style="font-size:8px;border-color:var(--purple)">+${badges.length-max}</div>`:"")
+    +`</div>`;
 }
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
@@ -1131,7 +1286,7 @@ function rAccueil(){
   if(feedInterval)clearInterval(feedInterval);
   // Sort by points first, then victories as tiebreaker
   const lb2=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.points-a.points||b.victoires-a.victoires);
-  const recent=feed.slice(0,6);
+  const recent=[...feed].sort((a,b)=>new Date(b.date)-new Date(a.date)||(Number(b.id)-Number(a.id))).slice(0,6);
   const allpho=[];feed.forEach(f=>(f.photos||[]).forEach(ph=>allpho.push({src:ph})));
   const photos=allpho.slice(0,12);
   // Correct counts
@@ -1355,15 +1510,15 @@ function rJeux(){
 }
 
 // ── HISTORIQUE ────────────────────────────────────────────────────────────────
-let histoPlayerFilter="all", histoGameFilter="all", histoShown=5;
+let histoPlayerFilter="all", histoGameFilter="all", histoShown=5, histoSortDir="desc";
 
 function rHisto(){
-  histoShown=5; // reset on re-render
+  histoShown=5;
   const filtered=getHistoFiltered();
 
   let h=`<div class="stitle">📜 HISTORIQUE (${feed.length})</div>`;
 
-  // Filters row
+  // Filters + sort direction row
   h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
     <select onchange="histoPlayerFilter=this.value;rHisto()"
       style="font-family:'Press Start 2P',monospace;font-size:7px;background:var(--bg3);border:2px solid ${histoPlayerFilter!=="all"?"var(--cyan)":"var(--border)"};color:var(--white);padding:6px 8px;cursor:pointer;outline:none;flex:1;min-width:120px">
@@ -1375,6 +1530,10 @@ function rHisto(){
       <option value="all"${histoGameFilter==="all"?" selected":""}>🎲 TOUS LES JEUX</option>
       ${ag().filter(g=>feed.some(f=>f.gameId===g.id)).map(g=>`<option value="${g.id}"${histoGameFilter===g.id?" selected":""}>${g.emoji} ${g.name}</option>`).join("")}
     </select>
+    <button class="fbtn on" onclick="histoSortDir=histoSortDir==='desc'?'asc':'desc';rHisto()"
+      style="white-space:nowrap;border-color:var(--purple);color:var(--purple);flex-shrink:0">
+      ${histoSortDir==="desc"?"⬇ RÉCENTS":"⬆ ANCIENS"}
+    </button>
   </div>`;
 
   if(!filtered.length){
@@ -1392,8 +1551,13 @@ function rHisto(){
 }
 
 function getHistoFiltered(){
-  // Sort newest first by date, then by id as tiebreaker
-  let f=[...feed].sort((a,b)=>new Date(b.date)-new Date(a.date)||(b.id>a.id?1:-1));
+  // Sort by date, then by numeric id as tiebreaker (both ascending or descending)
+  let f=[...feed].sort((a,b)=>{
+    const dDiff=new Date(b.date)-new Date(a.date);
+    if(dDiff!==0)return dDiff;
+    return Number(b.id)-Number(a.id);
+  });
+  if(histoSortDir==="asc") f.reverse();
   if(histoPlayerFilter!=="all") f=f.filter(e=>(e.playerIds||[]).includes(histoPlayerFilter));
   if(histoGameFilter!=="all") f=f.filter(e=>e.gameId===histoGameFilter);
   return f;
@@ -1507,7 +1671,12 @@ function rJoueurs(){
     h+=`<div class="card ac${i%7}" style="${bgStyle}opacity:1">
       ${bgStyle?`<div style="position:absolute;inset:0;background:rgba(13,13,26,.75);z-index:0"></div>`:""}
       <div style="position:relative;z-index:1;display:flex;align-items:center;gap:14px">
-        ${av}
+        <div style="position:relative">
+          ${av}
+          <div style="position:absolute;top:-6px;left:-6px;display:flex;flex-direction:column;gap:2px">
+            ${computeBadges(p.id).filter(b=>b.unlocked).slice(0,3).map(b=>`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}" style="width:22px;height:22px;font-size:11px">${b.emoji}</div>`).join("")}
+          </div>
+        </div>
         <div style="flex:1">
           <div style="font-size:12px;margin-bottom:4px">${p.name}</div>
           <div class="rank-badge ${rk.cls}" style="display:inline-block">${rk.name}</div>
@@ -1515,7 +1684,6 @@ function rJoueurs(){
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="ebtn" onclick="openEP('${p.id}')">✏️</button>
-          <button class="dbtn" style="font-size:16px" onclick="delPlayer('${p.id}')">🗑️</button>
         </div>
       </div>
       <div class="srow" style="position:relative;z-index:1">
@@ -1742,6 +1910,8 @@ function openPM(){
   document.getElementById("p-cardbg-clear").style.display="none";
   document.getElementById("pModalTitle").textContent="👾 AJOUTER JOUEUR";
   document.getElementById("pSubmitBtn").textContent="AJOUTER";
+  const bdSec2=document.getElementById("p-badges-section");
+  if(bdSec2)bdSec2.style.display="none";
   selCol=COLS[players.length%COLS.length];bCols();
   setBannerUI(false);
   document.getElementById("pModal").style.display="flex";
@@ -1780,6 +1950,10 @@ function openEP(id){
   document.getElementById("pSubmitBtn").textContent="ENREGISTRER ✓";
   selCol=p.color||COLS[0];bCols();
   setBannerUI(!!p.showBanner);
+  // Show badges
+  const bdSec=document.getElementById("p-badges-section");
+  const bdGrid=document.getElementById("p-badges-grid");
+  if(bdSec&&bdGrid){bdSec.style.display="block";bdGrid.innerHTML=renderBadgeGrid(id);}
   document.getElementById("pModal").style.display="flex";
   document.getElementById("pp").onchange=async function(){
     if(!this.files[0])return;
@@ -2328,7 +2502,7 @@ function drawStatsChart(){
   if(!canvas)return;
 
   // Build entries
-  let entries=[...feed].sort((a,b)=>new Date(a.date)-new Date(b.date)||(a.id>b.id?1:-1));
+  let entries=[...feed].sort((a,b)=>new Date(a.date)-new Date(b.date)||(Number(a.id)-Number(b.id)));
   if(stSelGame!=="all")entries=entries.filter(f=>f.gameId===stSelGame);
   if(stVsOnly&&stSelPlayers.length>1)
     entries=entries.filter(f=>stSelPlayers.every(pid=>(f.playerIds||[]).includes(pid)));
