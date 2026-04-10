@@ -429,7 +429,8 @@ select option{background:var(--bg2)}
     </div>
   </div>
   <div id="p-badges-section" class="fg" style="display:none">
-    <label class="lbl" style="color:var(--yellow)">🏅 BADGES DÉBLOQUÉS</label>
+    <label class="lbl" style="color:var(--yellow)">🏅 BADGES</label>
+    <div style="font-size:7px;color:var(--muted);margin-bottom:8px;line-height:1.8">Épinglez jusqu'à <span style="color:var(--yellow)">3 badges</span> sur votre carte.<br>Seuls les badges épinglés sont visibles.</div>
     <div id="p-badges-grid" style="margin-top:6px"></div>
   </div>
   <div class="brow"><button class="bg" onclick="cm('pModal')">ANNULER</button><button class="bp" id="pSubmitBtn" onclick="submitPlayer()">AJOUTER</button></div>
@@ -532,6 +533,27 @@ select option{background:var(--bg2)}
  </div>
 </div>
 
+<!-- CROP MODAL -->
+<div id="cropModal" class="ov" style="display:none">
+ <div class="modal fi" style="border-color:var(--cyan);box-shadow:6px 6px 0 var(--cyan);max-width:480px">
+  <div class="mtitle" style="color:var(--cyan)">✂️ RECADRER L'IMAGE</div>
+  <div style="position:relative;width:100%;background:#000;overflow:hidden;touch-action:none" id="crop-container">
+    <img id="crop-img" style="max-width:100%;display:block;transform-origin:top left;cursor:move;user-select:none"/>
+    <div id="crop-frame" style="position:absolute;border:3px dashed var(--yellow);pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.55)"></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:7px;color:var(--muted)">ZOOM:</span>
+    <input type="range" id="crop-zoom" min="0.2" max="4" step="0.05" value="1"
+      style="flex:1;accent-color:var(--cyan)" oninput="cropApplyZoom(this.value)"/>
+    <span id="crop-zoom-val" style="font-size:7px;color:var(--cyan);min-width:32px">100%</span>
+  </div>
+  <div class="brow" style="margin-top:12px">
+    <button class="bg" onclick="cropCancel()">ANNULER</button>
+    <button class="bp" onclick="cropConfirm()" style="background:var(--cyan);color:#000">CONFIRMER ✓</button>
+  </div>
+ </div>
+</div>
+
 <!-- SETTINGS MODAL -->
 <div id="settModal" class="ov" style="display:none" onclick="if(event.target===this)cm('settModal')">
  <div class="modal fi" style="border-color:var(--cyan);box-shadow:6px 6px 0 var(--cyan)">
@@ -621,6 +643,16 @@ function gameRankFor(place, n){
   if(n===3) return place===1?1:place===2?2:4;
   return place===1?1:place===2?2:place===3?3:4;
 }
+
+// Robust date sort: parse YYYY-MM-DD strictly, fall back to numeric id
+function feedSortDesc(a, b){
+  const da=a.date?new Date(a.date+"T12:00:00"):new Date(0);
+  const db=b.date?new Date(b.date+"T12:00:00"):new Date(0);
+  const diff=db-da;
+  if(diff!==0)return diff;
+  return Number(b.id)-Number(a.id);
+}
+function feedSortAsc(a, b){ return -feedSortDesc(a,b); }
 
 // ── BADGE SYSTEM ──────────────────────────────────────────────────────────────
 const BADGES=[
@@ -739,16 +771,33 @@ function computeBadges(pid){
 }
 
 function renderBadgeGrid(pid){
+  const p=players.find(x=>x.id===pid);
+  const pinned=p?.pinnedBadges||[];
   const badges=computeBadges(pid);
-  return badges.map(b=>`
-    <div class="badge-item ${b.unlocked?"unlocked":"locked"}">
+  return badges.map(b=>{
+    const isPinned=pinned.includes(b.id);
+    const canPin=b.unlocked&&(isPinned||pinned.length<3);
+    return`<div class="badge-item ${b.unlocked?"unlocked":"locked"}" style="cursor:${b.unlocked?"pointer":"default"}" onclick="${b.unlocked?`toggleBadgePin('${pid}','${b.id}')`:""}" title="${b.unlocked?(isPinned?"Retirer de la carte":"Épingler sur la carte"):""}">
       <div style="font-size:22px;flex-shrink:0">${b.emoji}</div>
-      <div>
+      <div style="flex:1">
         <div style="font-size:7px;color:${b.unlocked?"var(--yellow)":"var(--muted)"};letter-spacing:1px;margin-bottom:3px">${b.name}</div>
         <div style="font-size:6px;color:var(--muted);line-height:1.8">${b.desc}</div>
-        ${b.unlocked?`<div style="font-size:6px;color:var(--green);margin-top:3px;letter-spacing:1px">✓ DÉBLOQUÉ</div>`:`<div style="font-size:6px;color:var(--border);margin-top:3px">🔒 VERROUILLÉ</div>`}
+        ${b.unlocked?`<div style="font-size:6px;color:${isPinned?"var(--cyan)":"var(--green)"};margin-top:3px;letter-spacing:1px">${isPinned?"📌 ÉPINGLÉ":"✓ DÉBLOQUÉ"}</div>`:`<div style="font-size:6px;color:var(--border);margin-top:3px">🔒 VERROUILLÉ</div>`}
       </div>
-    </div>`).join("");
+      ${b.unlocked?`<div style="font-size:7px;color:${isPinned?"var(--cyan)":"var(--border)"};flex-shrink:0;font-size:16px">${isPinned?"📌":"○"}</div>`:""}
+    </div>`;
+  }).join("");
+}
+
+function toggleBadgePin(pid, bid){
+  const p=players.find(x=>x.id===pid);if(!p)return;
+  if(!p.pinnedBadges)p.pinnedBadges=[];
+  if(p.pinnedBadges.includes(bid)){p.pinnedBadges=p.pinnedBadges.filter(x=>x!==bid);}
+  else if(p.pinnedBadges.length<3){p.pinnedBadges.push(bid);}
+  // re-render grid
+  const bdGrid=document.getElementById("p-badges-grid");
+  if(bdGrid)bdGrid.innerHTML=renderBadgeGrid(pid);
+  sv();
 }
 
 function renderBadgeIcons(pid, max=3){
@@ -1286,7 +1335,7 @@ function rAccueil(){
   if(feedInterval)clearInterval(feedInterval);
   // Sort by points first, then victories as tiebreaker
   const lb2=players.map(p=>({...p,...gt(p.id)})).sort((a,b)=>b.points-a.points||b.victoires-a.victoires);
-  const recent=[...feed].sort((a,b)=>new Date(b.date)-new Date(a.date)||(Number(b.id)-Number(a.id))).slice(0,6);
+  const recent=[...feed].sort(feedSortDesc).slice(0,6);
   const allpho=[];feed.forEach(f=>(f.photos||[]).forEach(ph=>allpho.push({src:ph})));
   const photos=allpho.slice(0,12);
   // Correct counts
@@ -1427,10 +1476,11 @@ function rClass(){
           <div style="font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${p.name}</div>
           <div class="rank-badge ${rk.cls}" style="font-size:5px;padding:2px 5px">${rk.name}</div>
         </div>
-        <div style="display:flex;gap:14px;flex-shrink:0;text-align:center">
-          <div><div style="font-size:12px;color:var(--yellow)">${p.victoires}</div><div style="font-size:6px;color:var(--muted)">🏆</div></div>
-          <div><div style="font-size:12px;color:var(--cyan)">${p.points||0}</div><div style="font-size:6px;color:var(--muted)">⭐</div></div>
-          <div><div style="font-size:12px;color:${ac}">${r}%</div><div style="font-size:6px;color:var(--muted)">WIN</div></div>
+        <div style="display:flex;gap:10px;flex-shrink:0;text-align:center">
+          <div><div style="font-size:11px;color:var(--yellow)">${p.victoires}</div><div style="font-size:6px;color:var(--muted)">🥇</div></div>
+          <div><div style="font-size:11px;color:var(--cyan)">${p.seconds||0}</div><div style="font-size:6px;color:var(--muted)">🥈</div></div>
+          <div><div style="font-size:11px;color:var(--orange)">${p.troisiemes||0}</div><div style="font-size:6px;color:var(--muted)">🥉</div></div>
+          <div><div style="font-size:11px;color:${ac}">${r}%</div><div style="font-size:6px;color:var(--muted)">WIN</div></div>
         </div>
       </div>
       <div class="barw" style="margin-top:7px">
@@ -1552,12 +1602,8 @@ function rHisto(){
 
 function getHistoFiltered(){
   // Sort by date, then by numeric id as tiebreaker (both ascending or descending)
-  let f=[...feed].sort((a,b)=>{
-    const dDiff=new Date(b.date)-new Date(a.date);
-    if(dDiff!==0)return dDiff;
-    return Number(b.id)-Number(a.id);
-  });
-  if(histoSortDir==="asc") f.reverse();
+  let f=[...feed].sort(feedSortDesc);
+  if(histoSortDir==="asc") f.sort(feedSortAsc);
   if(histoPlayerFilter!=="all") f=f.filter(e=>(e.playerIds||[]).includes(histoPlayerFilter));
   if(histoGameFilter!=="all") f=f.filter(e=>e.gameId===histoGameFilter);
   return f;
@@ -1670,20 +1716,18 @@ function rJoueurs(){
     else if(p.cardBgColor){bgStyle=`background-color:${p.cardBgColor};`;}
     h+=`<div class="card ac${i%7}" style="${bgStyle}opacity:1">
       ${bgStyle?`<div style="position:absolute;inset:0;background:rgba(13,13,26,.75);z-index:0"></div>`:""}
-      <div style="position:relative;z-index:1;display:flex;align-items:center;gap:14px">
-        <div style="position:relative">
-          ${av}
-          <div style="position:absolute;top:-6px;left:-6px;display:flex;flex-direction:column;gap:2px">
-            ${computeBadges(p.id).filter(b=>b.unlocked).slice(0,3).map(b=>`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}" style="width:22px;height:22px;font-size:11px">${b.emoji}</div>`).join("")}
+      <div style="position:relative;z-index:1;display:flex;align-items:flex-start;gap:14px">
+        ${av}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <div style="font-size:12px">${p.name}</div>
+            <div style="display:flex;align-items:center;gap:4px">
+              ${(p.pinnedBadges||[]).map(bid=>{const b=BADGES.find(x=>x.id===bid);return b?`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}" style="width:24px;height:24px;font-size:12px">${b.emoji}</div>`:""}).join("")}
+              <button class="ebtn" onclick="openEP('${p.id}')">✏️</button>
+            </div>
           </div>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:12px;margin-bottom:4px">${p.name}</div>
           <div class="rank-badge ${rk.cls}" style="display:inline-block">${rk.name}</div>
           ${best?`<div style="font-size:7px;color:var(--muted);margin-top:5px">TOP: ${best.emoji} ${best.name} (${best.v}🏆)</div>`:""}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="ebtn" onclick="openEP('${p.id}')">✏️</button>
         </div>
       </div>
       <div class="srow" style="position:relative;z-index:1">
@@ -1916,20 +1960,13 @@ function openPM(){
   setBannerUI(false);
   document.getElementById("pModal").style.display="flex";
   setTimeout(()=>document.getElementById("p-name").focus(),100);
-  document.getElementById("pp").onchange=async function(){
-    if(!this.files[0])return;
-    ppho=await compress(this.files[0],600,0.92);
-    document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;
+  document.getElementById("pp").onchange=function(){
+    if(!this.files[0])return;const file=this.files[0];this.value="";
+    compressAndCrop(file,"circle",r=>{ppho=r;document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;});
   };
-  document.getElementById("p-cardbg-file").onchange=async function(){
-    if(!this.files[0])return;
-    pCardBgImg=await compress(this.files[0],1080,0.85);
-    pCardBgColor=null;
-    document.getElementById("p-cardbg-color").value="";
-    document.getElementById("p-cardbg-colorprev").style.background="";
-    document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;
-    document.getElementById("p-cardbg-clear").style.display="inline-block";
-    this.value="";
+  document.getElementById("p-cardbg-file").onchange=function(){
+    if(!this.files[0])return;const file=this.files[0];this.value="";
+    compressAndCrop(file,"free",r=>{pCardBgImg=r;pCardBgColor=null;document.getElementById("p-cardbg-color").value="";document.getElementById("p-cardbg-colorprev").style.background="";document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;document.getElementById("p-cardbg-clear").style.display="inline-block";});
   };
   document.getElementById("p-cardbg-color").oninput=function(){
     const v=this.value.trim();
@@ -1955,20 +1992,13 @@ function openEP(id){
   const bdGrid=document.getElementById("p-badges-grid");
   if(bdSec&&bdGrid){bdSec.style.display="block";bdGrid.innerHTML=renderBadgeGrid(id);}
   document.getElementById("pModal").style.display="flex";
-  document.getElementById("pp").onchange=async function(){
-    if(!this.files[0])return;
-    ppho=await compress(this.files[0],600,0.92);
-    document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;
+  document.getElementById("pp").onchange=function(){
+    if(!this.files[0])return;const file=this.files[0];this.value="";
+    compressAndCrop(file,"circle",r=>{ppho=r;document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;});
   };
-  document.getElementById("p-cardbg-file").onchange=async function(){
-    if(!this.files[0])return;
-    pCardBgImg=await compress(this.files[0],1080,0.85);
-    pCardBgColor=null;
-    document.getElementById("p-cardbg-color").value="";
-    document.getElementById("p-cardbg-colorprev").style.background="";
-    document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;
-    document.getElementById("p-cardbg-clear").style.display="inline-block";
-    this.value="";
+  document.getElementById("p-cardbg-file").onchange=function(){
+    if(!this.files[0])return;const file=this.files[0];this.value="";
+    compressAndCrop(file,"free",r=>{pCardBgImg=r;pCardBgColor=null;document.getElementById("p-cardbg-color").value="";document.getElementById("p-cardbg-colorprev").style.background="";document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;document.getElementById("p-cardbg-clear").style.display="inline-block";});
   };
   document.getElementById("p-cardbg-color").oninput=function(){
     const v=this.value.trim();
@@ -2362,7 +2392,7 @@ function resetSettings(){
 
 // ── STATS TAB ─────────────────────────────────────────────────────────────────
 const ST_COLORS=['#3dffd0','#ff5f87','#f7c948','#b57aff','#5b8fff','#3dff9a','#ff4757','#00d2d3','#c56ef3','#ffd32a'];
-let stSelPlayers=[],stSelGame="all",stVsOnly=false,stMetric="points";
+let stSelPlayers=[],stSelGame="all",stVsOnly=false,stMetric="points",stTimeFilter="all";
 let stShowLabels=false,stPlayerSearch="",stGameSearch="";
 let stChartData=null;
 
@@ -2383,12 +2413,16 @@ function rStats(){
     <!-- LEFT: CHART -->
     <div>
       <!-- Metric selector -->
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <button class="sfbtn${stMetric==="points"?" on":""}" onclick="stSetMetric('points')">⭐ POINTS</button>
         <button class="sfbtn${stMetric==="victoires"?" on":""}" onclick="stSetMetric('victoires')">🏆 VICTOIRES</button>
         <button class="sfbtn${stMetric==="parties"?" on":""}" onclick="stSetMetric('parties')">🎮 PARTIES</button>
         <button class="sfbtn${stMetric==="avgRank"?" on":""}" onclick="stSetMetric('avgRank')">📊 RANG MOY.</button>
         <button class="sfbtn${stShowLabels?" on":""}" onclick="stToggleLabels()" style="margin-left:auto;${stShowLabels?"border-color:var(--yellow);color:var(--yellow)":""}">🏷 NOMS</button>
+      </div>
+      <!-- Time filter -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        ${[["all","TOUT"],["week","SEMAINE"],["month","MOIS"],["year","ANNÉE"],["20","20 DERN."],["50","50 DERN."],["100","100 DERN."]].map(([k,v])=>`<button class="sfbtn${stTimeFilter===k?" on":""}" onclick="stSetTime('${k}')" style="font-size:6px;padding:4px 8px">${v}</button>`).join("")}
       </div>
 
       <!-- Chart box -->
@@ -2494,6 +2528,7 @@ function stTogglePlayer(id){
 function stSetGame(id){stSelGame=id;stUpdatePanels();drawStatsChart();}
 function stToggleVs(){stVsOnly=!stVsOnly;rStats();}
 function stSetMetric(m){stMetric=m;rStats();}
+function stSetTime(t){stTimeFilter=t;drawStatsChart();}
 function stToggleLabels(){stShowLabels=!stShowLabels;drawStatsChart();}
 
 function drawStatsChart(){
@@ -2502,13 +2537,20 @@ function drawStatsChart(){
   if(!canvas)return;
 
   // Build entries
-  let entries=[...feed].sort((a,b)=>new Date(a.date)-new Date(b.date)||(Number(a.id)-Number(b.id)));
+  let entries=[...feed].sort(feedSortAsc);
   if(stSelGame!=="all")entries=entries.filter(f=>f.gameId===stSelGame);
   if(stVsOnly&&stSelPlayers.length>1)
     entries=entries.filter(f=>stSelPlayers.every(pid=>(f.playerIds||[]).includes(pid)));
   else
     entries=entries.filter(f=>stSelPlayers.some(pid=>(f.playerIds||[]).includes(pid)));
 
+  // Apply time filter
+  if(stTimeFilter!=="all"){
+    if(stTimeFilter==="week"){const c=new Date();c.setDate(c.getDate()-7);entries=entries.filter(f=>new Date(f.date+"T12:00:00")>=c);}
+    else if(stTimeFilter==="month"){const c=new Date();c.setMonth(c.getMonth()-1);entries=entries.filter(f=>new Date(f.date+"T12:00:00")>=c);}
+    else if(stTimeFilter==="year"){const c=new Date();c.setFullYear(c.getFullYear()-1);entries=entries.filter(f=>new Date(f.date+"T12:00:00")>=c);}
+    else{const n=parseInt(stTimeFilter);if(!isNaN(n))entries=entries.slice(-n);}
+  }
   if(!entries.length){
     canvas.style.display="none";emptyMsg.style.display="block";stChartData=null;return;
   }
@@ -2706,6 +2748,102 @@ function setupChartHover(canvas){
   canvas.onmousemove=onMove;
   canvas.onmouseleave=onLeave;
   canvas.ontouchmove=e=>{e.preventDefault();onMove(e);};
+}
+
+// ── CROP / RESIZE TOOL ────────────────────────────────────────────────────────
+let _cropCallback=null, _cropShape="free";
+let _cropZoom=1, _cropOx=0, _cropOy=0, _cropDrag=false, _cropLx=0, _cropLy=0;
+let _cropNatW=0, _cropNatH=0, _cropContW=0, _cropContH=0;
+const CROP_SIZE=260; // crop-frame size px
+
+function openCropModal(dataUrl, shape, callback){
+  _cropCallback=callback; _cropShape=shape||"free";
+  _cropZoom=1; _cropOx=0; _cropOy=0;
+  document.getElementById("crop-zoom").value=1;
+  document.getElementById("crop-zoom-val").textContent="100%";
+  const img=document.getElementById("crop-img");
+  img.onload=()=>{
+    _cropNatW=img.naturalWidth; _cropNatH=img.naturalHeight;
+    _cropContW=img.offsetWidth; _cropContH=img.offsetHeight;
+    cropApplyZoom(1);
+  };
+  img.src=dataUrl;
+  document.getElementById("cropModal").style.display="flex";
+  // Frame: square centered
+  const frame=document.getElementById("crop-frame");
+  const cont=document.getElementById("crop-container");
+  frame.style.width=CROP_SIZE+"px"; frame.style.height=CROP_SIZE+"px";
+  frame.style.borderRadius=shape==="circle"?"50%":"0";
+  const cw=cont.offsetWidth; const ch=Math.min(cw*1.2,400);
+  cont.style.height=ch+"px";
+  frame.style.left=Math.max(0,(cw-CROP_SIZE)/2)+"px";
+  frame.style.top=Math.max(0,(ch-CROP_SIZE)/2)+"px";
+  // Drag support
+  const cimg=document.getElementById("crop-img");
+  function getXY(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY};}
+  cimg.onmousedown=cimg.ontouchstart=e=>{_cropDrag=true;const p=getXY(e);_cropLx=p.x;_cropLy=p.y;e.preventDefault();};
+  window.onmousemove=window.ontouchmove=e=>{
+    if(!_cropDrag)return;
+    const p=getXY(e);
+    _cropOx+=p.x-_cropLx; _cropOy+=p.y-_cropLy;
+    _cropLx=p.x; _cropLy=p.y;
+    cropApplyTransform();e.preventDefault();
+  };
+  window.onmouseup=window.ontouchend=()=>{_cropDrag=false;};
+}
+function cropApplyZoom(z){
+  _cropZoom=parseFloat(z);
+  document.getElementById("crop-zoom-val").textContent=Math.round(_cropZoom*100)+"%";
+  cropApplyTransform();
+}
+function cropApplyTransform(){
+  const img=document.getElementById("crop-img");
+  img.style.transform=`translate(${_cropOx}px,${_cropOy}px) scale(${_cropZoom})`;
+}
+function cropCancel(){
+  document.getElementById("cropModal").style.display="none";
+  window.onmousemove=null;window.onmouseup=null;window.ontouchmove=null;window.ontouchend=null;
+  _cropCallback=null;
+}
+function cropConfirm(){
+  const img=document.getElementById("crop-img");
+  const frame=document.getElementById("crop-frame");
+  const cont=document.getElementById("crop-container");
+  const contRect=cont.getBoundingClientRect();
+  const frameRect=frame.getBoundingClientRect();
+  // frame position relative to container
+  const fx=frameRect.left-contRect.left;
+  const fy=frameRect.top-contRect.top;
+  const fw=frameRect.width, fh=frameRect.height;
+  // img rendered position
+  const imgRect=img.getBoundingClientRect();
+  const ix=imgRect.left-contRect.left;
+  const iy=imgRect.top-contRect.top;
+  const iw=imgRect.width, ih=imgRect.height;
+  // map frame coords to natural image coords
+  const scaleX=img.naturalWidth/iw;
+  const scaleY=img.naturalHeight/ih;
+  const sx=Math.max(0,(fx-ix)*scaleX);
+  const sy=Math.max(0,(fy-iy)*scaleY);
+  const sw=Math.min(fw*scaleX,img.naturalWidth-sx);
+  const sh=Math.min(fh*scaleY,img.naturalHeight-sy);
+  const out=256; // output size
+  const c=document.createElement("canvas");c.width=out;c.height=out;
+  const ctx2=c.getContext("2d");
+  if(_cropShape==="circle"){ctx2.beginPath();ctx2.arc(out/2,out/2,out/2,0,Math.PI*2);ctx2.clip();}
+  ctx2.drawImage(img,sx,sy,sw,sh,0,0,out,out);
+  const result=c.toDataURL("image/jpeg",0.92);
+  document.getElementById("cropModal").style.display="none";
+  window.onmousemove=null;window.onmouseup=null;window.ontouchmove=null;window.ontouchend=null;
+  if(_cropCallback)_cropCallback(result);
+  _cropCallback=null;
+}
+
+// Wrap compress to open crop modal after loading
+function compressAndCrop(file, shape, callback){
+  const r=new FileReader();
+  r.onload=e=>openCropModal(e.target.result, shape, callback);
+  r.readAsDataURL(file);
 }
 
 function initFirebase(){
