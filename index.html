@@ -600,6 +600,7 @@ select option{background:var(--bg2)}
 
   <div class="brow" style="margin-top:16px">
     <button class="bg" onclick="resetSettings()">RÉINITIALISER</button>
+    <button class="bg" onclick="isAdmin()?(adminLogout(),this.textContent='🔒 MODE ADMIN'):(adminLogin(),this.textContent=isAdmin()?'🔓 ADMIN ON':'🔒 MODE ADMIN')" id="admin-btn" style="color:var(--orange);border-color:var(--orange)">🔒 MODE ADMIN</button>
     <button class="bp" onclick="cm('settModal')">FERMER</button>
   </div>
  </div>
@@ -855,7 +856,7 @@ function ag(){
 }
 function gg(id){return ag().find(g=>g.id===id)}
 const wr=(v,p)=>p>0?Math.round(v/p*100):0;
-const med=(i)=>MEDALS[i]||("#"+(i+1));
+const med=(i)=>i<3?MEDALS[i]:("#"+(i+1));
 function gt(pid){
   const raw=Object.values(stats[pid]||{}).reduce((a,s)=>({
     parties:a.parties+s.parties,
@@ -1477,9 +1478,17 @@ function rClass(){
           <div class="rank-badge ${rk.cls}" style="font-size:5px;padding:2px 5px">${rk.name}</div>
         </div>
         <div style="display:flex;gap:10px;flex-shrink:0;text-align:center">
-          <div><div style="font-size:11px;color:var(--yellow)">${p.victoires}</div><div style="font-size:6px;color:var(--muted)">🥇</div></div>
-          <div><div style="font-size:11px;color:var(--cyan)">${p.seconds||0}</div><div style="font-size:6px;color:var(--muted)">🥈</div></div>
-          <div><div style="font-size:11px;color:var(--orange)">${p.troisiemes||0}</div><div style="font-size:6px;color:var(--muted)">🥉</div></div>
+          ${classSort==="victoires"?`
+            <div><div style="font-size:11px;color:var(--yellow)">${p.victoires}</div><div style="font-size:6px;color:var(--muted)">🥇</div></div>
+            <div><div style="font-size:11px;color:var(--cyan)">${p.seconds||0}</div><div style="font-size:6px;color:var(--muted)">🥈</div></div>
+            <div><div style="font-size:11px;color:var(--orange)">${p.troisiemes||0}</div><div style="font-size:6px;color:var(--muted)">🥉</div></div>
+          `:classSort==="points"?`
+            <div><div style="font-size:11px;color:var(--cyan)">${p.points||0}</div><div style="font-size:6px;color:var(--muted)">⭐PTS</div></div>
+          `:classSort==="parties"?`
+            <div><div style="font-size:11px;color:var(--cyan)">${p.parties}</div><div style="font-size:6px;color:var(--muted)">PARTIES</div></div>
+          `:classSort==="jeux"?`
+            <div><div style="font-size:11px;color:var(--purple)">${p.jeux}</div><div style="font-size:6px;color:var(--muted)">JEUX</div></div>
+          `:""}
           <div><div style="font-size:11px;color:${ac}">${r}%</div><div style="font-size:6px;color:var(--muted)">WIN</div></div>
         </div>
       </div>
@@ -1722,8 +1731,9 @@ function rJoueurs(){
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">
             <div style="font-size:12px">${p.name}</div>
             <div style="display:flex;align-items:center;gap:4px">
-              ${(p.pinnedBadges||[]).map(bid=>{const b=BADGES.find(x=>x.id===bid);return b?`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}" style="width:24px;height:24px;font-size:12px">${b.emoji}</div>`:""}).join("")}
+              ${(p.pinnedBadges||[]).map(bid=>{const b=BADGES.find(x=>x.id===bid);return b?`<div class="badge-icon unlocked" title="${b.name}: ${b.desc}" style="width:34px;height:34px;font-size:20px">${b.emoji}</div>`:""}).join("")}
               <button class="ebtn" onclick="openEP('${p.id}')">✏️</button>
+              ${isAdmin()?`<button class="dbtn" style="font-size:16px" onclick="delPlayer('${p.id}')">🗑️</button>`:""}
             </div>
           </div>
           <div class="rank-badge ${rk.cls}" style="display:inline-block">${rk.name}</div>
@@ -1962,11 +1972,11 @@ function openPM(){
   setTimeout(()=>document.getElementById("p-name").focus(),100);
   document.getElementById("pp").onchange=function(){
     if(!this.files[0])return;const file=this.files[0];this.value="";
-    compressAndCrop(file,"circle",r=>{ppho=r;document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;});
+    compressAndCrop(file,"square",r=>{ppho=r;document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;});
   };
   document.getElementById("p-cardbg-file").onchange=function(){
     if(!this.files[0])return;const file=this.files[0];this.value="";
-    compressAndCrop(file,"free",r=>{pCardBgImg=r;pCardBgColor=null;document.getElementById("p-cardbg-color").value="";document.getElementById("p-cardbg-colorprev").style.background="";document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;document.getElementById("p-cardbg-clear").style.display="inline-block";});
+    compressAndCrop(file,"banner",r=>{pCardBgImg=r;pCardBgColor=null;document.getElementById("p-cardbg-color").value="";document.getElementById("p-cardbg-colorprev").style.background="";document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;document.getElementById("p-cardbg-clear").style.display="inline-block";});
   };
   document.getElementById("p-cardbg-color").oninput=function(){
     const v=this.value.trim();
@@ -1994,11 +2004,11 @@ function openEP(id){
   document.getElementById("pModal").style.display="flex";
   document.getElementById("pp").onchange=function(){
     if(!this.files[0])return;const file=this.files[0];this.value="";
-    compressAndCrop(file,"circle",r=>{ppho=r;document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;});
+    compressAndCrop(file,"square",r=>{ppho=r;document.getElementById("pp-prev").innerHTML=`<img class="prev" src="${ppho}"/>`;});
   };
   document.getElementById("p-cardbg-file").onchange=function(){
     if(!this.files[0])return;const file=this.files[0];this.value="";
-    compressAndCrop(file,"free",r=>{pCardBgImg=r;pCardBgColor=null;document.getElementById("p-cardbg-color").value="";document.getElementById("p-cardbg-colorprev").style.background="";document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;document.getElementById("p-cardbg-clear").style.display="inline-block";});
+    compressAndCrop(file,"banner",r=>{pCardBgImg=r;pCardBgColor=null;document.getElementById("p-cardbg-color").value="";document.getElementById("p-cardbg-colorprev").style.background="";document.getElementById("p-cardbg-prev").innerHTML=`<img style="width:100%;height:60px;object-fit:cover;border:2px solid var(--border);margin-top:6px" src="${pCardBgImg}"/>`;document.getElementById("p-cardbg-clear").style.display="inline-block";});
   };
   document.getElementById("p-cardbg-color").oninput=function(){
     const v=this.value.trim();
@@ -2370,6 +2380,8 @@ function openSettings(){
     this.value="";
   };
   document.getElementById("settModal").style.display="flex";
+  const ab=document.getElementById("admin-btn");
+  if(ab)ab.textContent=isAdmin()?"🔓 ADMIN ON":"🔒 MODE ADMIN";
 }
 function setFontSize(s){
   localSettings.fontSize=s;saveSettings();
@@ -2589,9 +2601,9 @@ function drawStatsChart(){
       const ptsFor2=(pl)=>n2<=2?pl===1?1:-1:n2===3?pl===1?2:pl===2?1:-1:pl===1?3:pl===2?2:pl===3?1:-1;
       const rnk=getRankings(f);
       const rankedSet=new Set(rnk.flatMap(r=>r.pids));
-      if(!rankedSet.has(pid)){cum=Math.max(0,cum+ptsFor2(999));}
-      else{const r=rnk.find(r=>r.pids.includes(pid));cum=Math.max(0,cum+(r?ptsFor2(r.place):0));}
-      vals.push(cum);dates.push(fd(f.date));
+      if(!rankedSet.has(pid)){cum+=ptsFor2(999);}
+      else{const r=rnk.find(r=>r.pids.includes(pid));cum+=(r?ptsFor2(r.place):0);}
+      vals.push(Math.max(0,cum));dates.push(fd(f.date));
     });
     return{pid,name:p?.name||pid,color,vals,dates};
   });
@@ -2750,6 +2762,18 @@ function setupChartHover(canvas){
   canvas.ontouchmove=e=>{e.preventDefault();onMove(e);};
 }
 
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
+const ADMIN_KEY="gn_admin_v1";
+function isAdmin(){try{return localStorage.getItem(ADMIN_KEY)==="yes";}catch(e){return false;}}
+function adminLogin(){
+  const pw=prompt("🔐 MOT DE PASSE ADMIN:");
+  if(pw===null)return;
+  // Change "VOTRE_MOT_DE_PASSE" below to your actual password
+  if(pw==="riftleRiotTopaz"){try{localStorage.setItem(ADMIN_KEY,"yes");}catch(e){}alert("✓ Connecté en mode admin.");rAll();}
+  else{alert("❌ Mot de passe incorrect.");}
+}
+function adminLogout(){try{localStorage.removeItem(ADMIN_KEY);}catch(e){}rAll();}
+
 // ── CROP / RESIZE TOOL ────────────────────────────────────────────────────────
 let _cropCallback=null, _cropShape="free";
 let _cropZoom=1, _cropOx=0, _cropOy=0, _cropDrag=false, _cropLx=0, _cropLy=0;
@@ -2772,12 +2796,15 @@ function openCropModal(dataUrl, shape, callback){
   // Frame: square centered
   const frame=document.getElementById("crop-frame");
   const cont=document.getElementById("crop-container");
-  frame.style.width=CROP_SIZE+"px"; frame.style.height=CROP_SIZE+"px";
-  frame.style.borderRadius=shape==="circle"?"50%":"0";
-  const cw=cont.offsetWidth; const ch=Math.min(cw*1.2,400);
+  const cw=cont.offsetWidth||400;
+  const ch=Math.min(cw*1.2,420);
   cont.style.height=ch+"px";
-  frame.style.left=Math.max(0,(cw-CROP_SIZE)/2)+"px";
-  frame.style.top=Math.max(0,(ch-CROP_SIZE)/2)+"px";
+  const fW=shape==="banner"?Math.min(cw-20,380):CROP_SIZE;
+  const fH=shape==="banner"?Math.round(fW/3):CROP_SIZE;
+  frame.style.width=fW+"px"; frame.style.height=fH+"px";
+  frame.style.borderRadius="0";
+  frame.style.left=Math.max(0,(cw-fW)/2)+"px";
+  frame.style.top=Math.max(0,(ch-fH)/2)+"px";
   // Drag support
   const cimg=document.getElementById("crop-img");
   function getXY(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY};}
@@ -2827,12 +2854,12 @@ function cropConfirm(){
   const sy=Math.max(0,(fy-iy)*scaleY);
   const sw=Math.min(fw*scaleX,img.naturalWidth-sx);
   const sh=Math.min(fh*scaleY,img.naturalHeight-sy);
-  const out=256; // output size
-  const c=document.createElement("canvas");c.width=out;c.height=out;
-  const ctx2=c.getContext("2d");
-  if(_cropShape==="circle"){ctx2.beginPath();ctx2.arc(out/2,out/2,out/2,0,Math.PI*2);ctx2.clip();}
-  ctx2.drawImage(img,sx,sy,sw,sh,0,0,out,out);
-  const result=c.toDataURL("image/jpeg",0.92);
+  const outW=_cropShape==="banner"?768:256;
+  const outH=_cropShape==="banner"?200:256;
+  const cnv=document.createElement("canvas");cnv.width=outW;cnv.height=outH;
+  const ctx2=cnv.getContext("2d");
+  ctx2.drawImage(img,sx,sy,sw,sh,0,0,outW,outH);
+  const result=cnv.toDataURL("image/jpeg",0.92);
   document.getElementById("cropModal").style.display="none";
   window.onmousemove=null;window.onmouseup=null;window.ontouchmove=null;window.ontouchend=null;
   if(_cropCallback)_cropCallback(result);
