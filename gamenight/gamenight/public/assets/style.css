@@ -11,13 +11,16 @@
   --blue:#3b5dc9;--sky:#41a6f6;--cyan:#73eff7;
   --wood:#7a4841;--tan:#c98a5b;--skin:#f2c4a0;
   --px:3px;
-  --ui:'Nunito',ui-rounded,system-ui,sans-serif;
-  --disp:'Fredoka','Nunito',ui-rounded,sans-serif;
-  --dz:1.42;--dw:600;
+  --ui:'Press Start 2P',monospace;
+  --disp:'Press Start 2P',monospace;
+  --dz:1.6;--dw:400;
   color-scheme:dark;
 }
+:root[data-font="douce"]{--ui:'Nunito',ui-rounded,system-ui,sans-serif;--disp:'Fredoka','Nunito',ui-rounded,sans-serif;--dz:1.42;--dw:600}
 :root[data-font="nette"]{--ui:'Outfit',system-ui,sans-serif;--disp:'Outfit',system-ui,sans-serif;--dz:1.36;--dw:700}
-:root[data-font="pixel"]{--ui:'Pixelify Sans',ui-rounded,system-ui,sans-serif;--disp:'Press Start 2P',monospace;--dz:1;--dw:400}
+/* Originale (default): the site's first font, Press Start 2P everywhere. Its letters are very large
+   for their size, so they are shrunk uniformly (x-height 0.75 -> 0.47 = 63%) and titles compensate via --dz. */
+:root:not([data-font="douce"]):not([data-font="nette"]) *{font-size-adjust:.47!important}
 :root[data-theme="sunset"]{
   --bg:#26172a;--bg2:#321d38;--bg3:#432949;--bg4:#5f3a60;
   --frame:#130a16;
@@ -29,7 +32,7 @@ body{background:var(--bg);color:var(--text);font:400 1rem/1.45 var(--ui);min-hei
 body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
   background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:6px 6px}
 img{display:block}
-.pxi{display:inline-block;image-rendering:pixelated;image-rendering:crisp-edges;flex-shrink:0;vertical-align:middle}
+.pxi{display:inline-block;background-size:100% 100%;background-repeat:no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;flex-shrink:0;vertical-align:middle;font-style:normal}
 button{font:inherit;color:inherit}
 a{color:var(--cyan)}
 ::selection{background:var(--yellow);color:var(--bg)}
@@ -87,7 +90,7 @@ a{color:var(--cyan)}
 .linkbtn{background:none;border:0;color:var(--cyan);font:500 .95rem var(--ui);cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:0}
 
 /* ── HEADER ───────────────────────────────────────────────────────────────── */
-#hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(4px);
+#hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 94%,transparent);
   box-shadow:0 var(--px) 0 0 var(--frame),0 calc(2*var(--px)) 0 0 rgba(0,0,0,.25)}
 .hdr-in{max-width:1100px;margin:0 auto;padding:.7rem 1rem 0}
 .hdr-top{display:flex;align-items:center;gap:.75rem}
@@ -229,9 +232,9 @@ input[type=range]{accent-color:var(--yellow)}
 /* Night: the sun has set on the left, the moon is up on the right.
    Sunset: the sun hangs low on the left, the moon is still below the horizon on the right. */
 .orb{position:absolute;pointer-events:none;transition:top 2.6s steps(32),left 2.6s steps(32),right 2.6s steps(32)}
-.orb img{display:block}
+.orb .pxi{display:block}
 .sun{left:2%;top:calc(100% + 24px)}
-.sun img{width:96px;height:96px}
+.sun .pxi{width:96px!important;height:96px!important}
 .sun::before{content:"";position:absolute;inset:-40px;background:radial-gradient(circle,rgba(255,205,117,.45),rgba(239,125,87,.14) 45%,transparent 70%)}
 :root[data-theme="sunset"] .sun{left:6%;top:30px;transition-delay:.9s}
 .moon{right:6%;top:18px;transition-delay:.9s}
@@ -280,8 +283,8 @@ input[type=range]{accent-color:var(--yellow)}
   .bubble::before{left:26px;bottom:-12px;clip-path:polygon(0 0,100% 0,100% 25%,75% 25%,75% 50%,50% 50%,50% 75%,25% 75%,25% 100%,0 100%)}
   .bubble{margin-bottom:1rem}
   .moon{top:8px;right:8px}
-  .moon img{width:32px;height:32px}
-  .sun img{width:48px;height:48px}
+  .moon .pxi{width:32px!important;height:32px!important}
+  .sun .pxi{width:48px!important;height:48px!important}
   .sun::before{inset:-24px}
   :root[data-theme="sunset"] .sun{left:8px;top:8px}
   .hero-in{padding-top:2.8rem}
@@ -316,6 +319,7 @@ input[type=range]{accent-color:var(--yellow)}
 .av{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;
   font:var(--dw) calc(.7rem*var(--dz)) var(--disp);color:#1a1c2c;box-shadow:0 0 0 2px var(--frame);background:var(--bg4)}
 .av img{width:100%;height:100%;object-fit:cover}
+.av.ph{background-size:cover;background-position:center}
 .av img.pxav{image-rendering:pixelated}
 .avs{display:inline-flex;flex-wrap:wrap;gap:5px}
 
@@ -355,7 +359,7 @@ input[type=range]{accent-color:var(--yellow)}
 .art{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;
   background:repeating-conic-gradient(var(--a1,#29366f) 0 25%,var(--a2,#253063) 0 50%) 0 0/12px 12px}
 .gcard .art{aspect-ratio:16/10}
-.art img.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.art .cover{position:absolute;inset:0;background-size:cover;background-position:center}
 .art .pxi{filter:drop-shadow(0 4px 0 rgba(0,0,0,.35));position:relative}
 .gcard .art .badge{position:absolute;left:6px;top:6px}
 .gcard-b{padding:.7rem .85rem .85rem;display:flex;flex-direction:column;gap:.35rem;flex:1}
@@ -384,7 +388,7 @@ input[type=range]{accent-color:var(--yellow)}
 
 /* ── PHOTOS ───────────────────────────────────────────────────────────────── */
 .pstrip{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
-.pstrip img{width:100%;aspect-ratio:1;object-fit:cover;cursor:pointer;box-shadow:0 0 0 2px var(--frame);transition:transform .08s}
+.pstrip img{width:100%;aspect-ratio:1;object-fit:cover;cursor:pointer;background:var(--bg3);box-shadow:0 0 0 2px var(--frame);transition:transform .08s}
 .pstrip img:hover{transform:scale(1.04)}
 #lb{position:fixed;inset:0;background:rgba(8,9,18,.96);display:none;align-items:center;justify-content:center;z-index:400;cursor:zoom-out;flex-direction:column;gap:12px;padding:16px}
 #lb.open{display:flex}
@@ -444,7 +448,7 @@ input[type=range]{accent-color:var(--yellow)}
 .wbtn.on{background:var(--wc);color:var(--bg);box-shadow:inset 0 -3px 0 0 rgba(0,0,0,.22)}
 .wbtn.on .pxi{filter:none;opacity:1}
 .wbtn .txt{max-width:0;overflow:hidden;white-space:nowrap;transition:max-width .15s}
-@media(min-width:880px){.wbtn .txt{max-width:260px}}
+@media(min-width:880px){.wbtn .txt{max-width:360px}}
 .wscore{display:flex;flex-direction:column;align-items:flex-end;gap:.35rem;flex-shrink:0;min-width:110px}
 .wscore .num{font-size:calc(.8rem*var(--dz));color:var(--yellow)}
 .wscore .bar{flex:none;width:120px}
@@ -493,7 +497,7 @@ input[type=range]{accent-color:var(--yellow)}
 
 @media(max-width:430px){
   .logo-t{font-size:calc(.62rem*var(--dz));white-space:nowrap}
-  .logo .pxi{width:24px;height:24px}
+  .logo .pxi{width:24px!important;height:24px!important}
   .hdr-top{gap:.4rem}
   .hdr-actions{gap:0}
   .hdr-actions .btn{margin:2px}

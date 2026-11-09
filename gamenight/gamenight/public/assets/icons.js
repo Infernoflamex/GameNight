@@ -142,9 +142,21 @@ function uri(name,swap){
   if(!u){u="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg(name,swap));cache.set(k,u);}
   return u;
 }
+// Each icon (or recolored variant) is registered once as a CSS class; markup only carries the class name.
+let sheet=null;const done=new Set();
+function iconClass(name,swap){
+  if(!ICONS[name])name="dice";
+  const k=swap?name+"_"+Object.keys(swap).map(function(a){return a+swap[a];}).join(""):name;
+  if(!done.has(k)){
+    done.add(k);
+    if(!sheet){sheet=document.createElement("style");sheet.id="px-icons";document.head.appendChild(sheet);}
+    sheet.appendChild(document.createTextNode(".pi-"+k+'{background-image:url("'+uri(name,swap)+'")}'));
+  }
+  return "pi-"+k;
+}
 function icon(name,size,cls,swap){
   size=size||16;
-  return '<img class="pxi'+(cls?" "+cls:"")+'" src="'+uri(name,swap)+'" width="'+size+'" height="'+size+'" alt="" aria-hidden="true" draggable="false">';
+  return '<i class="pxi '+iconClass(name,swap)+(cls?" "+cls:"")+'" style="width:'+size+'px;height:'+size+'px" aria-hidden="true"></i>';
 }
 window.PX={uri:uri,icon:icon,svg:svg,has:function(n){return Object.prototype.hasOwnProperty.call(ICONS,n);},names:function(){return Object.keys(ICONS);}};
 })();

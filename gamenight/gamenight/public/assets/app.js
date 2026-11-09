@@ -14,8 +14,11 @@ const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""
 const wr=(v,p)=>p>0?Math.round(v/p*100):0;
 const initial=n=>([...String(n||"?").trim()][0]||"?").toUpperCase();
 function arr(v){return Array.isArray(v)?v.filter(Boolean):v?Object.values(v).filter(Boolean):[];}
-function fd(d){if(!d)return"—";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});}
-function fdShort(d){if(!d)return"";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"});}
+// Date formatting is surprisingly slow in browsers: one shared formatter + a cache per date string.
+const DF_LONG=new Intl.DateTimeFormat("fr-FR",{day:"numeric",month:"short",year:"numeric"}),DF_SHORT=new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"2-digit"});
+const fdCache=new Map(),fdsCache=new Map();
+function fd(d){if(!d)return"—";let v=fdCache.get(d);if(v===undefined){v=DF_LONG.format(new Date(d+"T12:00:00"));fdCache.set(d,v);}return v;}
+function fdShort(d){if(!d)return"";let v=fdsCache.get(d);if(v===undefined){v=DF_SHORT.format(new Date(d+"T12:00:00"));fdsCache.set(d,v);}return v;}
 function pick(a){return a[Math.floor(Math.random()*a.length)];}
 
 // ── GAMES ────────────────────────────────────────────────────────────────────
@@ -81,7 +84,7 @@ function gIcon(g){
 }
 function gameArt(g,size=48,useCover=true,extra=""){
   const[a,b]=tint(g?.id||"x");
-  const inner=useCover&&g?.img?`<img class="cover" src="${g.img}" alt="" loading="lazy">`:ic(gIcon(g),size);
+  const inner=useCover&&g?.img?coverDiv(g):ic(gIcon(g),size);
   return`<div class="art" style="--a1:${a};--a2:${b};${extra}">${inner}</div>`;
 }
 function countByGame(){const c={};feed.forEach(f=>{c[f.gameId]=(c[f.gameId]||0)+1;});return c;}
@@ -112,7 +115,12 @@ function feedSortDesc(a,b){
   return Number(b.id)-Number(a.id);
 }
 function feedSortAsc(a,b){return-feedSortDesc(a,b);}
+const rkCache=new WeakMap(); // normalized rankings per match object (cleared when a match is edited)
 function getRankings(f){
+  let c=rkCache.get(f);if(c)return c;
+  c=rankingsOf(f);rkCache.set(f,c);return c;
+}
+function rankingsOf(f){
   if(f.rankings)return arr(f.rankings).map(r=>({...r,pids:arr(r.pids)}));
   if(!f.winnerId)return[];
   const ranks=[{place:1,pids:[f.winnerId]}];
@@ -473,14 +481,34 @@ function avSrc(p){
   if(c)return{url:c,px:true};
   if(c===undefined){
     pxCache.set(p.photo,null);
-    makePixel(p.photo).then(u=>{pxCache.set(p.photo,u||false);clearTimeout(pxTimer);pxTimer=setTimeout(()=>{renderAcct();rAll();},150);});
+    makePixel(p.photo).then(u=>{pxCache.set(p.photo,u||false);clearTimeout(pxTimer);pxTimer=setTimeout(syncImageCss,120);});
   }
   return{url:p.photo,px:false};
 }
+// Big data-URL images (profile photos, card backgrounds, game covers) live in ONE generated
+// stylesheet instead of being pasted into every page's HTML, so tab switches stay light.
+const cssId=s=>String(s).replace(/[^a-zA-Z0-9_-]/g,"_");
+let imgSig="";
+function syncImageCss(){
+  const list=[];
+  players.forEach(p=>{
+    if(p.photo){const s=avSrc(p);list.push(["ph-"+cssId(p.id),s.url,s.px?";image-rendering:pixelated":""]);}
+    if(p.cardBgImg)list.push(["cb-"+cssId(p.id),p.cardBgImg,""]);
+  });
+  ag().forEach(g=>{if(g.img)list.push(["gc-"+cssId(g.id),g.img,""]);});
+  const sig=list.map(([c,u,x])=>c+u.length+u.slice(-12)+x).join(";");
+  if(sig===imgSig)return;
+  imgSig=sig;
+  let el=$("img-css");
+  if(!el){el=document.createElement("style");el.id="img-css";document.head.appendChild(el);}
+  el.textContent=list.map(([c,u,x])=>`.${c}{background-image:url("${u}")${x}}`).join("\n");
+}
+const coverDiv=g=>`<div class="cover gc-${cssId(g.id)}"></div>`;
+const cardBg=p=>p.cardBgImg?`<div class="card-bg cb-${cssId(p.id)}"></div>`:p.cardBgColor?`<div class="card-bg" style="background:${esc(p.cardBgColor)}"></div>`:"";
 function avatar(p,size=32){
   const box=`width:${size}px;height:${size}px`;
   if(!p)return`<span class="av" style="${box}"></span>`;
-  if(p.photo){const s=avSrc(p);return`<span class="av" style="${box}" title="${esc(p.name)}"><img${s.px?' class="pxav"':""} src="${s.url}" alt=""></span>`;}
+  if(p.photo){avSrc(p);return`<span class="av ph ph-${cssId(p.id)}" style="${box}" title="${esc(p.name)}"></span>`;}
   return`<span class="av" style="${box};background:${esc(p.color||"#94b0c2")};font-size:calc(${Math.max(8,Math.round(size*.36))}px*var(--dz))" title="${esc(p.name)}">${esc(initial(p.name))}</span>`;
 }
 const pname=pid=>players.find(p=>p.id===pid)?.name||"?";
@@ -529,8 +557,34 @@ const PSETS=[];
 function photoStrip(photos,max=12){
   if(!photos||!photos.length)return"";
   const k=PSETS.push(photos)-1;
-  return`<div class="pstrip">${photos.slice(0,max).map((src,i)=>`<img src="${src}" loading="lazy" alt="" data-ps="${k}" data-i="${i}">`).join("")}</div>`
+  return`<div class="pstrip">${photos.slice(0,max).map((src,i)=>thumbImg(src,k,i)).join("")}</div>`
     +(photos.length>max?`<div class="mt"><button class="btn ghost sm" data-gall="${k}">${ic("camera",16)}Voir les ${photos.length} photos</button></div>`:"");
+}
+// Match photos are shown as small thumbnails (made once, in the background); full size only in the lightbox.
+const BLANK="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+const thumbs=new Map(),thumbIds=new Map(),thumbQueue=[];let thumbBusy=false;
+function thumbImg(src,k,i){
+  const t=thumbs.get(src);
+  if(t)return`<img src="${t}" alt="" data-ps="${k}" data-i="${i}">`;
+  if(!thumbIds.has(src)){thumbIds.set(src,thumbIds.size);thumbQueue.push(src);setTimeout(runThumbs,0);}
+  return`<img src="${BLANK}" alt="" data-th="${thumbIds.get(src)}" data-ps="${k}" data-i="${i}">`;
+}
+async function runThumbs(){
+  if(thumbBusy)return;thumbBusy=true;
+  while(thumbQueue.length){
+    const src=thumbQueue.shift();
+    const t=await new Promise(res=>{
+      const img=new Image();
+      img.onload=()=>{try{const m=240,r=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement("canvas");
+        c.width=Math.max(1,Math.round(img.width*r));c.height=Math.max(1,Math.round(img.height*r));
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.8));}catch(e){res(src);}};
+      img.onerror=()=>res(src);img.src=src;
+    });
+    thumbs.set(src,t);
+    document.querySelectorAll(`img[data-th="${thumbIds.get(src)}"]`).forEach(im=>{im.src=t;im.removeAttribute("data-th");});
+    await new Promise(r=>setTimeout(r,16));
+  }
+  thumbBusy=false;
 }
 function openLB(src){$("lbimg").src=src;$("lb").classList.add("open");}
 function closeLB(){$("lb").classList.remove("open");}
@@ -539,7 +593,7 @@ function openGall(ph){gallPhotos=ph;gallPage=0;$("gall-grid").innerHTML="";$("ga
 function closeGall(){$("gall").classList.remove("open");}
 function gallMore(){
   const k=PSETS.push(gallPhotos)-1,start=gallPage*30;
-  $("gall-grid").insertAdjacentHTML("beforeend",gallPhotos.slice(start,start+30).map((src,i)=>`<img src="${src}" loading="lazy" alt="" data-ps="${k}" data-i="${start+i}">`).join(""));
+  $("gall-grid").insertAdjacentHTML("beforeend",gallPhotos.slice(start,start+30).map((src,i)=>thumbImg(src,k,start+i)).join(""));
   gallPage++;$("gall-more").style.display=gallPage*30<gallPhotos.length?"inline-flex":"none";
 }
 
@@ -574,13 +628,19 @@ function go(id){
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="pg-"+id));
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===id));
   document.querySelector(`.tab[data-tab="${id}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"});
-  render(id);window.scrollTo({top:0});
+  if(!render(id)&&id==="stats")drawStatsChart();
+  window.scrollTo({top:0});
   try{history.replaceState(null,"","#"+id);}catch(e){}
 }
-function render(id){
+// A tab is only rebuilt when something changed since it was last drawn (data, login, settings).
+let dataVer=0;const pageVer={};
+function render(id,force){
+  if(!force&&pageVer[id]===dataVer)return false;
+  pageVer[id]=dataVer;
   ({accueil:rAccueil,classement:rClass,jeux:rJeux,envies:rEnvies,historique:rHisto,stats:rStats,joueurs:rJoueurs})[id]?.();
+  return true;
 }
-function rAll(){render(curTab);bgaRefreshLinks();}
+function rAll(){dataVer++;syncImageCss();render(curTab,true);bgaRefreshLinks();}
 
 // ── ACCUEIL ──────────────────────────────────────────────────────────────────
 const H=n=>`<span class="hl">${esc(n)}</span>`;
@@ -681,9 +741,11 @@ function factBatch(all){
   for(const f of [...all].sort(()=>Math.random()-.5)){if((cnt[f.who]||0)>=2&&f.who!=="_")continue;cnt[f.who]=(cnt[f.who]||0)+1;out.push(f);if(out.length>=12)break;}
   return out;
 }
+let factsAll=[],factsVer=-1;
 function startFeed(){
   clearInterval(feedTimer);
-  feedFacts=factBatch(buildFacts());feedIdx=0;renderFact(false);
+  if(factsVer!==dataVer){factsAll=buildFacts();factsVer=dataVer;}
+  feedFacts=factBatch(factsAll);feedIdx=0;renderFact(false);
   if(feedFacts.length>1)feedTimer=setInterval(()=>nextFact(),8000);
 }
 function nextFact(){if(!feedFacts.length)return;feedIdx=(feedIdx+1)%feedFacts.length;renderFact(true);}
@@ -811,7 +873,7 @@ function rClass(){
   if(!lb.length){$("pg-classement").innerHTML=h+`<div class="empty box">${ic("players",32)}Aucun joueur.</div>`;return;}
   lb.forEach((p,i)=>{
     const r=wr(p.victoires,p.parties),ar=avgRank(p);
-    const bg=p.cardBgImg?`<div class="card-bg" style="background-image:url(${p.cardBgImg})"></div>`:p.cardBgColor?`<div class="card-bg" style="background:${esc(p.cardBgColor)}"></div>`:"";
+    const bg=cardBg(p);
     const stat=(v,l,c,cls="")=>`<div class="${cls}"><div class="v" style="--vc:${c}">${v}</div><div class="l">${l}</div></div>`;
     let cols="";
     if(classSort==="victoires")cols=stat(p.victoires,"1re","var(--yellow)")+stat(p.seconds,"2e","#c9d6e0","hide-s")+stat(p.troisiemes,"3e","var(--tan)","hide-s");
@@ -854,7 +916,7 @@ function rJeux(){
     played.forEach(g=>{
       const lead=g.ldr&&g.ldr.v>0?`<div class="gcard-l" title="Meilleur joueur">${ic("crown",16)}<span class="ell">${esc(g.ldr.name)}</span><span class="muted">${g.ldr.v}</span></div>`:"";
       h+=`<div class="gcard box" onclick="openDetail('${g.id}')">
-        <div class="art" style="--a1:${tint(g.id)[0]};--a2:${tint(g.id)[1]}">${g.img?`<img class="cover" src="${g.img}" alt="" loading="lazy">`:ic(gIcon(g),64)}
+        <div class="art" style="--a1:${tint(g.id)[0]};--a2:${tint(g.id)[1]}">${g.img?coverDiv(g):ic(gIcon(g),64)}
           ${gType(g)==="online"?`<span class="badge tag on">${ic("globe",16)}En ligne</span>`:""}
           ${loggedIn()?`<div class="tools"><button class="ibtn" onclick="event.stopPropagation();openEG('${g.id}')" title="Modifier">${ic("pencil",16)}</button></div>`:""}</div>
         <div class="gcard-b"><div class="gcard-n">${esc(g.name)}</div>
@@ -912,7 +974,8 @@ function wishAll(on){wishPresent=on?players.map(p=>p.id):[];rEnvies();}
 function rEnvies(){
   const legend=`<div class="legend box">${[3,2,1].map(l=>`<span class="it"><span class="lv" style="--wc:${WISH[l].c}">${WISH[l].short}</span>${ic(WISH[l].icon,16)}<b>${esc(WISH[l].label)}</b></span>`).join("")}</div>`;
   let h=`<div class="page-head"><h2 class="ptitle">${ic("heart",32)}Envies</h2>
-    ${seg([["group","Le groupe","players"],["mine","Mes envies","heart"]],wishView,"setWishView")}</div>
+    <div class="row">${seg([["group","Le groupe","players"],["mine","Mes envies","heart"]],wishView,"setWishView")}
+    <button class="btn" onclick="openGameModal()" title="Ajouter un jeu au catalogue">${ic("plus",16)}Ajouter un jeu</button></div></div>
     <p class="lead">Chacun note les jeux auxquels il a envie de jouer. Le groupe voit ce qui fait l'unanimité, et la roue peut s'en servir.</p>${legend}`;
   if(wishView==="mine")h+=renderMyWishes();else h+=renderGroupWishes();
   $("pg-envies").innerHTML=h;
@@ -1122,7 +1185,7 @@ function submitEM(){
   if(!loggedIn())return;
   const f=feed.find(x=>x.id===emId);if(!f)return;
   const d=$("e-date").value;if(d)f.date=d;
-  const r=rankingsFrom(eRanks);if(r.length)f.rankings=r;
+  const r=rankingsFrom(eRanks);if(r.length)f.rankings=r;rkCache.delete(f);
   f.scores=readScores("e-scores");f.photos=[...empho];
   rbs();badgeCache.clear();cm("emModal");rAll();
   const k=feedKeys[f.id];if(k===undefined){toast("Partie introuvable, recharge la page","err","cross");return;}
@@ -1147,7 +1210,7 @@ function rJoueurs(){
   players.forEach(p=>{
     const t=gt(p.id),ar=avgRank(t);
     const bestG=ag().map(g=>({...g,v:stats[p.id]?.[g.id]?.victoires||0})).filter(g=>g.v>0).sort((a,b)=>b.v-a.v)[0];
-    const bg=p.cardBgImg?`<div class="card-bg" style="background-image:url(${p.cardBgImg})"></div>`:p.cardBgColor?`<div class="card-bg" style="background:${esc(p.cardBgColor)}"></div>`:"";
+    const bg=cardBg(p);
     const pins=(p.pinnedBadges||[]).map(bid=>BADGES.find(b=>b.id===bid)).filter(Boolean);
     const nWish=Object.keys(p.wishes||{}).length;
     const tool=canEdit(p.id)?`<button class="btn ghost sm sq" onclick="openEP('${p.id}')" title="Modifier">${ic("pencil",16)}</button>`
@@ -1329,7 +1392,7 @@ function bindGameInputs(){
 }
 function openGameModal(){
   requireLogin("Connecte-toi pour ajouter un jeu.",()=>{
-    egId=null;gNewImg=undefined;gSelIcon="meeple";gSelType=jeuxType==="online"?"online":"board";
+    egId=null;gNewImg=undefined;gSelIcon="meeple";gSelType=(curTab==="envies"?wishType:jeuxType)==="online"?"online":"board";
     $("gModalTitle").textContent="Nouveau jeu";$("g-meta").style.display="block";$("g-name").value="";
     $("g-cur").innerHTML="";$("gp-prev").innerHTML="";$("g-del").style.display="none";$("g-delimg").style.display="none";$("g-err").textContent="";
     renderIconPick();bindGameInputs();openM("gModal");setTimeout(()=>$("g-name").focus(),80);
@@ -1353,7 +1416,9 @@ function submitGame(){
     const name=$("g-name").value.trim();if(!name){$("g-err").textContent="Donne un nom au jeu.";return;}
     if(ag().some(g=>norm(g.name)===norm(name))){$("g-err").textContent="Ce jeu existe déjà.";return;}
     const c={id:"c"+Date.now(),name,icon:gSelIcon,type:gSelType,img:gNewImg||null};
-    customs.push(c);cm("gModal");rAll();
+    customs.push(c);cm("gModal");
+    if(curTab==="envies"){wishView="mine";wishFilter="all";wishSearch=name;} // jump straight to rating the new game
+    rAll();
     dbw(()=>dbRef.child("customs").push(clean(c)),[`${name} ajouté au catalogue`,gSelIcon]);
   }else{
     const c=customs.find(x=>x.id===egId),id=egId;
@@ -1489,7 +1554,7 @@ function drawWheel(ang){
     ctx.strokeStyle="#0c0d18";ctx.lineWidth=3;ctx.stroke();
     ctx.save();ctx.translate(cx,cy);ctx.rotate(s+seg/2);
     if(showIc){const im=wImg(gIcon(g));if(im.complete&&im.naturalWidth){ctx.save();ctx.translate(r-26,0);ctx.rotate(Math.PI/2);ctx.drawImage(im,-16,-16,32,32);ctx.restore();}}
-    ctx.fillStyle="#1a1c2c";ctx.font=`600 ${n>18?12:15}px ${uiFamily()}`;ctx.textAlign="right";ctx.textBaseline="middle";
+    ctx.fillStyle="#1a1c2c";ctx.font=`600 ${Math.round((n>18?12:15)*uiScale())}px ${uiFamily()}`;ctx.textAlign="right";ctx.textBaseline="middle";
     const max=n>18?16:20;const label=g.name.length>max?g.name.slice(0,max-1)+"…":g.name;
     ctx.fillText(label,showIc?r-50:r-14,1);ctx.restore();
   });
@@ -1607,7 +1672,7 @@ function drawStatsChart(){
   const cx=i=>PAD.left+(i/(numPts-1||1))*W;
   const cy=v=>isRank?PAD.top+((v-yMin)/(yMax-yMin))*Hh:PAD.top+Hh-(v/yMax)*Hh;
   ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#1a1c2c";ctx.fillRect(0,0,cssW,cssH);
-  ctx.font="500 12px "+uiFamily();
+  ctx.font=`500 ${Math.round(12*uiScale())}px `+uiFamily();
   yTicks.forEach(y=>{ctx.fillStyle="rgba(255,255,255,.06)";ctx.fillRect(PAD.left,Math.round(cy(y)),W,2);ctx.fillStyle="#7387a8";ctx.textAlign="right";ctx.fillText(isRank?(y===1?"1er":y+"e"):String(y),PAD.left-8,cy(y)+4);});
   ctx.textAlign="center";xTicks.forEach(i=>{const raw=entries[i-1];ctx.fillStyle="#7387a8";ctx.fillText(i===0?"":fdShort(raw?.date),cx(i),PAD.top+Hh+20);});
   ctx.fillStyle="#3a4470";ctx.fillRect(PAD.left-2,PAD.top,2,Hh+2);ctx.fillRect(PAD.left-2,PAD.top+Hh,W+2,2);
@@ -1615,7 +1680,7 @@ function drawStatsChart(){
     ctx.strokeStyle="#0c0d18";ctx.lineWidth=6;ctx.lineJoin="miter";ctx.beginPath();s.vals.forEach((v,i)=>i?ctx.lineTo(cx(i),cy(v)):ctx.moveTo(cx(i),cy(v)));ctx.stroke();
     ctx.strokeStyle=s.color;ctx.lineWidth=3;ctx.beginPath();s.vals.forEach((v,i)=>i?ctx.lineTo(cx(i),cy(v)):ctx.moveTo(cx(i),cy(v)));ctx.stroke();
     xTicks.forEach(i=>{if(i>=s.vals.length)return;ctx.fillStyle="#0c0d18";ctx.fillRect(cx(i)-5,cy(s.vals[i])-5,10,10);ctx.fillStyle=s.color;ctx.fillRect(cx(i)-3,cy(s.vals[i])-3,6,6);});
-    if(stShowLabels){const li=s.vals.length-1;ctx.fillStyle=s.color;ctx.textAlign="left";ctx.font="600 12px "+uiFamily();ctx.fillText(s.name.length>10?s.name.slice(0,9)+"…":s.name,cx(li)+8,cy(s.vals[li])+4);ctx.font="500 12px "+uiFamily();}
+    if(stShowLabels){const li=s.vals.length-1;ctx.fillStyle=s.color;ctx.textAlign="left";ctx.font=`600 ${Math.round(12*uiScale())}px `+uiFamily();ctx.fillText(s.name.length>10?s.name.slice(0,9)+"…":s.name,cx(li)+8,cy(s.vals[li])+4);ctx.font=`500 ${Math.round(12*uiScale())}px `+uiFamily();}
   });
   stChart={series,numPts,PAD,W,Hh};
   const tip=$("st-tooltip");
@@ -1637,9 +1702,10 @@ window.addEventListener("resize",()=>{clearTimeout(resizeT);resizeT=setTimeout((
 
 // ── SETTINGS (this device only) ──────────────────────────────────────────────
 const SETT_KEY="gn_settings";
-let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",font:"douce"};
-const FONTS=["douce","nette","pixel"];
+let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",police:"originale"};
+const FONTS=["originale","douce","nette"];
 function uiFamily(){return getComputedStyle(document.documentElement).getPropertyValue("--ui").trim()||"sans-serif";}
+function uiScale(){return localSettings.police==="douce"||localSettings.police==="nette"?1:.63;} // canvas text has no font-size-adjust
 function loadSettings(){try{const s=localStorage.getItem(SETT_KEY);if(s)localSettings={...localSettings,...JSON.parse(s)};}catch(e){}applySettings();}
 function saveSettings(){try{localStorage.setItem(SETT_KEY,JSON.stringify(localSettings));}catch(e){}applySettings();}
 function applySettings(){
@@ -1648,7 +1714,7 @@ function applySettings(){
   if(localSettings.bgImage){bg.style.backgroundImage=`url(${localSettings.bgImage})`;bg.style.opacity=(localSettings.bgOpacity||20)/100;bg.style.display="block";}
   else bg.style.display="none";
   document.body.classList.toggle("calm",!localSettings.animations);
-  document.documentElement.dataset.font=FONTS.includes(localSettings.font)?localSettings.font:"douce";
+  document.documentElement.dataset.font=FONTS.includes(localSettings.police)?localSettings.police:"originale";
   const th=localSettings.theme==="sunset"?"sunset":"night";
   document.documentElement.dataset.theme=th;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",th==="sunset"?"#26172a":"#1a1c2c");
@@ -1662,7 +1728,7 @@ function toggleTheme(){
 }
 function syncSettingsUI(){
   document.querySelectorAll("#fs-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.fs===localSettings.fontSize);b.onclick=()=>{localSettings.fontSize=b.dataset.fs;saveSettings();syncSettingsUI();if(curTab==="stats")drawStatsChart();};});
-  document.querySelectorAll("#font-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.font===(localSettings.font||"douce"));b.onclick=()=>{localSettings.font=b.dataset.font;saveSettings();syncSettingsUI();document.fonts.ready.then(()=>{if(curTab==="stats")drawStatsChart();});};});
+  document.querySelectorAll("#font-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.font===(localSettings.police||"originale"));b.onclick=()=>{localSettings.police=b.dataset.font;saveSettings();syncSettingsUI();document.fonts.ready.then(()=>{if(curTab==="stats")drawStatsChart();});};});
   document.querySelectorAll("#theme-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.th===(localSettings.theme||"night"));b.onclick=()=>{if(b.dataset.th!==localSettings.theme)toggleTheme();syncSettingsUI();};});
   $("set-pxav").classList.toggle("on",!!localSettings.pixelAvatars);
   $("set-anim").classList.toggle("on",!!localSettings.animations);
@@ -1677,7 +1743,7 @@ function openSettings(){
 function toggleSetting(k){localSettings[k]=!localSettings[k];saveSettings();syncSettingsUI();if(k==="pixelAvatars"){renderAcct();rAll();}}
 function setBgOpacity(v){localSettings.bgOpacity=parseInt(v);$("bg-opacity-val").textContent=v+"%";saveSettings();}
 function removeBg(){localSettings.bgImage=null;saveSettings();syncSettingsUI();}
-function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",font:"douce"};saveSettings();syncSettingsUI();renderAcct();rAll();}
+function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",police:"originale"};saveSettings();syncSettingsUI();renderAcct();rAll();}
 
 // ── CROP TOOL ────────────────────────────────────────────────────────────────
 let _cropCb=null,_cropShape="square",_cropZoom=1,_cropOx=0,_cropOy=0,_cropDrag=false,_cropLx=0,_cropLy=0;
