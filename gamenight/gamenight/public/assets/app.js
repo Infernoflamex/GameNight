@@ -1983,16 +1983,36 @@ function bgaParse(t){
     ppl:names.map((n,i)=>{const s=parseFloat(scores[i]);return{bid:ids[i]||"",name:n.trim(),score:isFinite(s)?s:null,rank:parseInt(ranks[i],10)||0};}),
   };
 }
+// A player can have several BGA accounts: one string, names separated by commas (BGA names
+// can't contain commas, since BGA's own history lists them comma-separated). Duplicates dropped.
+const bgaNames=v=>{const seen=new Set();return String(v||"").split(/[,;]/).map(s=>s.trim()).filter(s=>s&&!seen.has(norm(s))&&seen.add(norm(s)));};
 // Annotate fetched tables with the Game Night players they involve and whether they can be imported
 function bgaRows(){
-  const byName={};players.forEach(p=>{if(p.bga)byName[norm(p.bga)]=p.id;});
+  const byName={};players.forEach(p=>bgaNames(p.bga).forEach(n=>{byName[norm(n)]=p.id;}));
   const done=new Set(feed.map(f=>f.bga&&f.bga.table).filter(Boolean).map(String));
   return bgaTables.map(t=>{
     const ppl=t.ppl.map(p=>({...p,pid:byName[norm(p.name)]||null}));
-    const ins=ppl.filter(p=>p.pid);
+    // Two accounts of the same player at one table: count that player once, with their best result
+    const seen=new Set();
+    const ins=ppl.filter(p=>p.pid).sort((a,b)=>(a.rank||99)-(b.rank||99)).filter(p=>!seen.has(p.pid)&&seen.add(p.pid));
     const st=done.has(t.table)?"done":!ppl.some(p=>p.rank>0)?"open":ins.length<2?"few":"ok";
-    return{...t,ppl,ins,out:ppl.length-ins.length,st};
+    return{...t,ppl,ins,out:ppl.filter(p=>!p.pid).length,st};
   });
+}
+// A match already in the history (typed in by hand) that looks like this BGA game: same game,
+// same day (±1 for late nights), at least 2 same players, and no score that contradicts it.
+// Rematches with different scores are not flagged.
+function bgaDupOf(r){
+  const m=bgaMap[r.game],gid=m&&m.id&&m.id!=="-"?m.id:null;if(!gid||!r.date)return null;
+  const day=d=>Math.round(new Date(d+"T12:00:00")/864e5),d0=day(r.date);
+  const sc={};r.ins.forEach(p=>{if(p.score!==null)sc[p.pid]=p.score;});
+  return feed.find(f=>{
+    if(f.gameId!==gid||(f.bga&&f.bga.table)||!f.date||Math.abs(day(f.date)-d0)>1)return false;
+    const common=r.ins.filter(p=>(f.playerIds||[]).includes(p.pid));
+    if(common.length<2)return false;
+    const fsc=f.scores||{},has=v=>v!==undefined&&v!==null&&v!=="";
+    return common.every(p=>sc[p.pid]===undefined||!has(fsc[p.pid])||Number(fsc[p.pid])===sc[p.pid]);
+  })||null;
 }
 // Places among group members only (outsiders are left out), ties kept, top 3 like the manual form
 function bgaRankings(ins){
@@ -2051,24 +2071,25 @@ function bgaOnData(){
 }
 function bgaLogin(){openLogin("Connecte-toi pour importer tes parties Board Game Arena.",()=>bgaRender());}
 function bgaLinkRow(p){
-  const v=p.bga||"";
+  const v=bgaNames(p.bga).join(", ");
   return`<div class="bga-link">${avatar(p,24)}<span class="ell">${esc(p.name)}</span>${canEdit(p.id)
-    ?`<input type="text" value="${esc(v)}" placeholder="pseudo BGA" maxlength="40" autocapitalize="none" autocorrect="off" spellcheck="false" onchange="bgaSetName('${p.id}',this.value)" aria-label="Pseudo BGA de ${esc(p.name)}"/>`
-    :`<span class="ell${v?"":" muted"}">${esc(v||"—")}</span>`}</div>`;
+    ?`<input type="text" value="${esc(v)}" placeholder="pseudo BGA" maxlength="160" autocapitalize="none" autocorrect="off" spellcheck="false" onchange="bgaSetName('${p.id}',this.value)" aria-label="Pseudos BGA de ${esc(p.name)}"/>`
+    :`<span class="ell${v?"":" muted"}" title="${esc(v)}">${esc(v||"—")}</span>`}</div>`;
 }
 function bgaLinks(){
   return`${loggedIn()?"":`<div class="hint" style="margin:0 0 .5rem">Connecte-toi pour renseigner ton pseudo. <button class="linkbtn" onclick="bgaLogin()">Connexion</button></div>`}
     <div class="bga-links">${players.map(bgaLinkRow).join("")}</div>
-    <div class="hint">Le pseudo exact de ton profil BGA. Chacun renseigne le sien, l'admin peut tous les remplir.</div>`;
+    <div class="hint">Le pseudo exact de ton profil BGA. Plusieurs comptes ? Sépare-les par une virgule (ex : <b>pseudo1, pseudo2</b>). Chacun renseigne les siens, l'admin peut tous les remplir.</div>`;
 }
 function bgaSetName(pid,v){
   if(!canEdit(pid))return;
   const p=players.find(x=>x.id===pid);if(!p)return;
-  const name=String(v||"").trim();
-  if(name&&players.some(x=>x.id!==pid&&norm(x.bga)===norm(name))){toast("Ce pseudo BGA est déjà lié à un autre joueur","err","cross");bgaRender();return;}
-  if((p.bga||"")===name)return;
-  p.bga=name||null;svPlayer(pid,"bga",name||null);
-  toast(name?`${p.name} = ${name} sur BGA`:"Pseudo BGA retiré","ok","check");
+  const names=bgaNames(v),val=names.join(", ");
+  const taken=names.find(n=>players.some(x=>x.id!==pid&&bgaNames(x.bga).some(m=>norm(m)===norm(n))));
+  if(taken){toast(`« ${taken} » est déjà lié à un autre joueur`,"err","cross");bgaRender();return;}
+  if((p.bga||"")===val)return;
+  p.bga=val||null;svPlayer(pid,"bga",val||null);
+  toast(val?`${p.name} = ${val} sur BGA`:"Pseudo BGA retiré","ok","check");
   if(bgaBridge)bgaRenderList();
 }
 const bgaCountTxt=()=>`(${players.filter(p=>p.bga).length}/${players.length} renseignés)`;
@@ -2091,9 +2112,10 @@ function bgaRender(){
     <div class="bga-step"><span class="n">2</span><div class="grow"><div class="flabel">${ic("star",16)}Installe le favori (une seule fois)</div>
       <div class="row"><a class="btn alt bga-bm" href="${esc(bgaBookmarklet())}" onclick="event.preventDefault();toast('Glisse ce bouton dans ta barre de favoris','ok','star')">${ic("dice",16)}Game Night ⇢ BGA</a>
       <button class="btn ghost sm" onclick="bgaCopy()">Copier le code</button></div>
-      <div class="hint">Sur ordinateur, glisse le bouton jaune dans ta barre de favoris (Ctrl+Maj+B pour l'afficher). Sinon, crée un favori et colle le code copié à la place de l'adresse.</div></div></div>
+      <div class="hint">Sur ordinateur, affiche ta barre de favoris (Ctrl+Maj+B), puis glisse-y le bouton « Game Night ⇢ BGA ». Sinon, crée un favori et colle le code copié à la place de l'adresse.</div></div></div>
     <div class="bga-step"><span class="n">3</span><div class="grow"><div class="flabel">${ic("scroll",16)}Lance l'import</div>
-      <div>Va sur Board Game Arena, connecté à ton compte, et clique sur le favori. Game Night s'ouvre avec tes dernières parties : tu vérifies, tu coches, tu importes.</div>
+      <div>Va sur Board Game Arena, connecté à ton compte, et clique sur le favori depuis n'importe quelle page. Game Night s'ouvre avec tes dernières parties : tu vérifies, tu coches, tu importes.</div>
+      <div class="hint">Le favori lit l'historique du compte BGA connecté : son pseudo doit être renseigné à l'étape 1, et une partie n'est importée que si au moins 2 joueurs du groupe ont leur pseudo.</div>
       <div class="row mt"><a class="btn ghost sm" href="https://boardgamearena.com/" target="_blank" rel="noopener">${ic("globe",16)}Ouvrir Board Game Arena</a></div></div></div>
     <div class="mfoot"><button class="btn" onclick="cm('bgaModal')">Fermer</button></div>`;
 }
@@ -2109,8 +2131,8 @@ function bgaRenderList(){
   const rows=bgaRows(),ok=rows.filter(r=>r.st==="ok");
   ok.forEach(r=>{
     if(!bgaMap[r.game])bgaMap[r.game]={id:bgaGuess(r.game),name:bgaPretty(r.game)};
-    // Pre-tick clean results only: everyone in the group and a normal game end
-    if(!bgaSeen.has(r.table)){bgaSeen.add(r.table);if(!r.out&&r.normal)bgaSel.add(r.table);}
+    // Pre-tick clean results only: everyone in the group, a normal game end, not already in the history
+    if(!bgaSeen.has(r.table)){bgaSeen.add(r.table);if(!r.out&&r.normal&&!bgaDupOf(r))bgaSel.add(r.table);}
   });
   const games=[...new Set(ok.map(r=>r.game))];
   const pick=ok.filter(r=>bgaSel.has(r.table)&&bgaMap[r.game].id!=="-");
@@ -2145,10 +2167,14 @@ function bgaTableRow(r){
     return`<span class="bga-p">${k?ic(["medal1","medal2","medal3"][k-1],16):ic("skull",16)}${avatar(pl,20)}<b>${esc(pl.name)}</b>${sc(p.score)}</span>`;
   }).join("");
   const outs=r.ppl.filter(p=>!p.pid).map(p=>`<span class="bga-p out">${esc(p.name)}${sc(p.score)}</span>`).join("");
-  const tags=(r.out?`<span class="tag">+${r.out} hors groupe</span>`:"")+(r.normal?"":`<span class="tag">fin anormale</span>`);
+  const dup=bgaDupOf(r);
+  const tags=(dup?`<span class="tag warn">déjà enregistrée ?</span>`:"")+(r.out?`<span class="tag">+${r.out} hors groupe</span>`:"")+(r.normal?"":`<span class="tag">fin anormale</span>`);
+  // Show the look-alike match from the history so the date and scores can be compared
+  const dsc=dup&&dup.scores||{};
+  const dupLine=dup?`<div class="bga-dup">${ic("scroll",16)}<span>Déjà dans l'historique : <b>${fd(dup.date)}</b> · ${(dup.playerIds||[]).map(pid=>{const pl=players.find(x=>x.id===pid);const s=dsc[pid];return`${esc(pl?pl.name:"?")}${s!==undefined&&s!==null&&s!==""?` <b>${esc(s)}</b>`:""}`;}).join(", ")}. Coche seulement si c'est une autre partie.</span></div>`:"";
   return`<label class="bga-t${on?"":" off"}"><input type="checkbox"${on?" checked":""}${skip?" disabled":""} onchange="bgaToggle('${r.table}',this.checked)"/>
     <div class="grow"><div class="row" style="gap:.3rem .6rem"><b>${esc(gname)}</b><span class="hdate">${fd(r.date)}</span>${tags}</div>
-    <div class="bga-ppl">${ins}${outs}</div></div></label>`;
+    <div class="bga-ppl">${ins}${outs}</div>${dupLine}</div></label>`;
 }
 function bgaImport(){
   if(!loggedIn()){bgaLogin();return;}
