@@ -547,3 +547,18 @@ body.calm *{animation:none!important}
   .bga-link>:nth-child(3){grid-column:1/-1}
   .bga-game{grid-template-columns:minmax(0,1fr)}
 }
+
+/* ── PALETTE PICKER (Réglages) ─────────────────────────────────────────────── */
+.srow.pal-row{flex-direction:column;align-items:stretch;gap:.7rem}
+.pal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.5rem}
+.pal{display:flex;flex-direction:column;gap:.4rem;padding:.45rem .45rem .5rem;background:var(--bg);border:0;cursor:pointer;
+  color:var(--text2);box-shadow:inset 0 0 0 2px var(--bg4);text-align:left}
+.pal:hover{color:var(--text);box-shadow:inset 0 0 0 2px var(--text3)}
+.pal.on{color:var(--text);box-shadow:inset 0 0 0 3px var(--yellow)}
+.pal-sw{display:flex;height:22px;box-shadow:0 0 0 2px var(--frame)}
+.pal-sw i{flex:1}
+.pal-n{font:600 .82rem/1.2 var(--ui)}
+.pal-perso{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin-top:.8rem}
+#pal-pick .hint{margin-top:.6rem}
+.pal-c{display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;color:var(--text2)}
+.pal-c input[type=color]{width:42px;height:30px;padding:0;border:0;background:none;cursor:pointer;box-shadow:0 0 0 2px var(--frame)}

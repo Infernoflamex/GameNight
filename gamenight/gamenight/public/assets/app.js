@@ -1751,6 +1751,7 @@ function applySettings(){
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",th==="sunset"?"#26172a":"#1a1c2c");
   const tb=$("theme-btn");
   if(tb){tb.innerHTML=ic(th==="sunset"?"moon":"sun",16);tb.title=th==="sunset"?"Passer à la nuit":"Passer au coucher de soleil";}
+  applyPalette();
 }
 function toggleTheme(){
   localSettings.theme=localSettings.theme==="sunset"?"night":"sunset";saveSettings();
@@ -1765,6 +1766,7 @@ function syncSettingsUI(){
   $("set-anim").classList.toggle("on",!!localSettings.animations);
   $("bg-opacity").value=localSettings.bgOpacity||20;$("bg-opacity-val").textContent=(localSettings.bgOpacity||20)+"%";
   $("bg-remove").style.display=localSettings.bgImage?"inline-flex":"none";
+  renderPalettePick();
 }
 function openSettings(){
   syncSettingsUI();
@@ -1809,6 +1811,82 @@ function cropConfirm(){
   const res=c.toDataURL("image/jpeg",0.9),cb=_cropCb;cropCleanup();if(cb)cb(res);
 }
 function compressAndCrop(file,shape,cb){const r=new FileReader();r.onload=e=>openCropModal(e.target.result,shape,cb);r.readAsDataURL(file);}
+
+// ── PALETTE (couleurs du site, pour cet appareil) ────────────────────────────
+// A palette sets the main color variables inline on <html>, so it wins over the night/sunset
+// ambiance colors (the ambiance then only switches the sky scene). "Originale" sets nothing.
+// Backgrounds always stay dark: many labels use the background color as text on bright buttons,
+// so a light background would make them unreadable. Presets were contrast-checked against the original.
+const PAL_VARS=["--bg","--bg2","--bg3","--bg4","--frame","--text","--text2","--text3","--yellow","--orange","--cyan"];
+const PALETTES={
+  originale:{name:"Originale"},
+  ocean:{name:"Océan",c:["#0e1e2a","#132938","#1a3547","#285068","#060e15","#eef8fb","#a9cbd6","#7699a9","#5fe3cf","#ff8a6b","#8fd3ff"]},
+  foret:{name:"Forêt",c:["#13201a","#192a21","#21372b","#32503f","#08100b","#f1f6ea","#bcd0b4","#81a084","#d4e86a","#f0a35e","#8be0b0"]},
+  bonbon:{name:"Bonbon",c:["#22162e","#2c1c3b","#3a2650","#523673","#0f0816","#fdf2ff","#dcc2e8","#a68bbd","#ff9ad5","#ffb36b","#9ae6ff"]},
+  braise:{name:"Braise",c:["#1f1414","#2a1a19","#382220","#55322c","#0e0807","#fff1e6","#e3c2ad","#ad8a78","#ffc04d","#ff7a52","#ffd9a0"]},
+  gameboy:{name:"Game Boy",c:["#0f2a12","#143417","#1c431f","#2f6130","#061407","#e3f8d2","#acd391","#7fa868","#b8d82a","#e0c040","#c8ec7a"]},
+  contraste:{name:"Contraste fort",c:["#0b0b0b","#141414","#1f1f1f","#3a3a3a","#000000","#ffffff","#e6e6e6","#b8b8b8","#ffe14d","#ffa04d","#6fe8ff"]},
+  perso:{name:"Perso"},
+};
+const PAL_ORIG={night:["#1a1c2c","#2b3152"],sunset:["#26172a","#432949"]}; // for the "Originale" preview
+const PAL_DEF={bg:"#1a1c2c",accent:"#ffcd75",accent2:"#73eff7"};
+const isHex=v=>/^#[0-9a-f]{6}$/i.test(String(v||""));
+function hexHsl(hex){
+  const n=parseInt(hex.slice(1),16),r=(n>>16&255)/255,g=(n>>8&255)/255,b=(n&255)/255;
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn;let h=0,s=0;
+  if(d){s=d/(1-Math.abs(2*l-1));h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h*=60;if(h<0)h+=360;}
+  return[h,s,l];
+}
+function hslHex(h,s,l){
+  const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,9-k,1));};
+  return"#"+[f(0),f(8),f(4)].map(x=>Math.round(x*255).toString(16).padStart(2,"0")).join("");
+}
+function lumi(hex){const n=parseInt(hex.slice(1),16);return[n>>16&255,n>>8&255,n&255].map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4);}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);}
+function contrast(a,b){const x=lumi(a),y=lumi(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
+// Lighten a color until it reads well on the background (and dark text reads well on it)
+function readable(hex,bg){let[h,s,l]=hexHsl(hex),out=hex;while(contrast(out,bg)<5&&l<.97){l+=.02;out=hslHex(h,s,l);}return out;}
+function palCustom(){const c=localSettings.palCustom||{};return{bg:isHex(c.bg)?c.bg:PAL_DEF.bg,accent:isHex(c.accent)?c.accent:PAL_DEF.accent,accent2:isHex(c.accent2)?c.accent2:PAL_DEF.accent2};}
+// "Perso": the background keeps the picked hue but its lightness is fixed dark; accents are lightened if needed
+function customColors(){
+  const p=palCustom(),[h,s0]=hexHsl(p.bg),s=Math.min(s0,.5),ts=Math.min(s0,.25),bg=hslHex(h,s,.13);
+  return[bg,hslHex(h,s,.17),hslHex(h,s,.22),hslHex(h,s,.32),hslHex(h,s,.06),hslHex(h,ts,.96),hslHex(h,ts,.8),hslHex(h,Math.min(s0,.3),.62),
+    readable(p.accent,bg),readable("#ef7d57",bg),readable(p.accent2,bg)];
+}
+function palKey(){return PALETTES[localSettings.palette]?localSettings.palette:"originale";}
+function palColors(k){return k==="perso"?customColors():PALETTES[k]?.c||null;}
+function applyPalette(){
+  const root=document.documentElement,c=palColors(palKey());
+  PAL_VARS.forEach((v,i)=>c?root.style.setProperty(v,c[i]):root.style.removeProperty(v));
+  root.dataset.palette=palKey();
+  const bg=getComputedStyle(root).getPropertyValue("--bg").trim();
+  if(bg)document.querySelector('meta[name="theme-color"]')?.setAttribute("content",bg);
+}
+function setPalette(k){
+  if(!PALETTES[k])return;
+  localSettings.palette=k;saveSettings();renderPalettePick();
+  if(curTab==="stats")drawStatsChart(); // the chart paints its own background
+}
+function setPalCustom(key,v,done){
+  if(!isHex(v))return;
+  localSettings.palCustom={...palCustom(),[key]:v};localSettings.palette="perso";saveSettings();
+  // While the color picker is open only refresh the preview chips, so the picker stays open
+  const sw=$("pal-perso-sw");if(sw)sw.innerHTML=palSwatch(customColors());
+  if(done){renderPalettePick();if(curTab==="stats")drawStatsChart();}
+}
+function palSwatch(c){return[c[0],c[2],c[8],c[9],c[10]].map(x=>`<i style="background:${x}"></i>`).join("");}
+function renderPalettePick(){
+  const el=$("pal-pick");if(!el)return;
+  const cur=palKey(),o=PAL_ORIG[localSettings.theme==="sunset"?"sunset":"night"];
+  const sw=k=>k==="originale"?palSwatch([o[0],"",o[1],"","","","","","#ffcd75","#ef7d57","#73eff7"]):palSwatch(palColors(k));
+  let h=`<div class="pal-grid">${Object.keys(PALETTES).map(k=>`<button type="button" class="pal${k===cur?" on":""}" onclick="setPalette('${k}')" aria-pressed="${k===cur}">
+    <span class="pal-sw"${k==="perso"?` id="pal-perso-sw"`:""}>${sw(k)}</span><span class="pal-n">${esc(PALETTES[k].name)}</span></button>`).join("")}</div>`;
+  if(cur==="perso"){
+    const p=palCustom(),f=(key,label)=>`<label class="pal-c"><input type="color" value="${p[key]}" oninput="setPalCustom('${key}',this.value)" onchange="setPalCustom('${key}',this.value,true)"/><span>${label}</span></label>`;
+    h+=`<div class="pal-perso">${f("bg","Fond")}${f("accent","Accent")}${f("accent2","Liens")}</div>
+      <div class="hint">Le fond garde ta teinte mais reste sombre, et les accents sont éclaircis si besoin, pour que tout reste lisible.</div>`;
+  }else if(cur!=="originale")h+=`<div class="hint">La palette remplace les couleurs de l'ambiance. L'ambiance ne change alors plus que le ciel de l'accueil.</div>`;
+  el.innerHTML=h;
+}
 
 // ── BOARD GAME ARENA IMPORT ──────────────────────────────────────────────────
 // BGA has no public API, and its history endpoint only answers pages opened on boardgamearena.com
