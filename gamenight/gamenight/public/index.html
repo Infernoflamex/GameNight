@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700&family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="assets/style.css?v=20261109h"/>
+<link rel="stylesheet" href="assets/style.css?v=20261109i"/>
 </head>
 <body>
 <div id="bg-layer"></div>
@@ -289,7 +289,7 @@
   <div class="srow pal-row"><div><div class="t">Palette de couleurs</div><div class="d">Les couleurs du site, rien que chez toi</div></div><div id="pal-pick"></div></div>
   <div class="srow"><div><div class="t">Police</div><div class="d">Le style d'écriture du site</div></div><div class="seg" id="font-seg"><button data-font="originale" style="font-family:'Press Start 2P',monospace">Originale</button><button data-font="douce" style="font-family:'Nunito',sans-serif;font-size-adjust:none!important">Douce</button><button data-font="nette" style="font-family:'Outfit',sans-serif;font-size-adjust:none!important">Nette</button></div></div>
   <div class="srow"><div><div class="t">Taille du texte</div><div class="d">Pour lire sans plisser les yeux</div></div><div class="seg" id="fs-seg"><button data-fs="small">Petit</button><button data-fs="normal">Normal</button><button data-fs="large">Grand</button></div></div>
-  <div class="srow"><div><div class="t">Avatars pixelisés</div><div class="d">Transforme les photos de profil en portraits pixel</div></div><button class="toggle" id="set-pxav" onclick="toggleSetting('pixelAvatars')" aria-label="Avatars pixelisés"></button></div>
+  <div class="srow"><div><div class="t">Avatars pixelisés</div><div class="d">Transforme les photos de profil en portraits pixel</div></div><button class="toggle" id="set-pxav" onclick="toggleSetting('pxAvatars')" aria-label="Avatars pixelisés"></button></div>
   <div class="srow"><div><div class="t">Animations</div><div class="d">Étoiles, mascotte, dés qui roulent…</div></div><button class="toggle" id="set-anim" onclick="toggleSetting('animations')" aria-label="Animations"></button></div>
   <div class="srow"><div><div class="t">Image de fond</div><div class="d">Visible uniquement chez toi</div></div><div class="row"><label class="btn ghost sm" style="cursor:pointer"><span data-ic="photo" data-s="16"></span>Choisir<input type="file" id="bg-file" accept="image/*" hidden/></label><button class="btn danger sm" id="bg-remove" onclick="removeBg()" style="display:none">Retirer</button></div></div>
   <div class="srow" style="box-shadow:none"><div><div class="t">Opacité du fond</div><div class="d">Si une image de fond est active</div></div><div class="row"><input type="range" id="bg-opacity" min="5" max="60" value="20" style="width:120px" oninput="setBgOpacity(this.value)"/><span id="bg-opacity-val" class="muted" style="min-width:3em">20%</span></div></div>
@@ -317,7 +317,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
-<script src="assets/icons.js?v=20261109h"></script>
-<script src="assets/app.js?v=20261109h"></script>
+<script src="assets/icons.js?v=20261109i"></script>
+<script src="assets/app.js?v=20261109i"></script>
 </body>
 </html>

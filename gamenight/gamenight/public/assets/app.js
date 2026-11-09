@@ -478,7 +478,7 @@ function makePixel(src){
   });
 }
 function avSrc(p){
-  if(!localSettings.pixelAvatars)return{url:p.photo,px:false};
+  if(!localSettings.pxAvatars)return{url:p.photo,px:false};
   const c=pxCache.get(p.photo);
   if(c)return{url:c,px:true};
   if(c===undefined){
@@ -1756,7 +1756,7 @@ window.addEventListener("resize",()=>{clearTimeout(resizeT);resizeT=setTimeout((
 
 // ── SETTINGS (this device only) ──────────────────────────────────────────────
 const SETT_KEY="gn_settings";
-let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",police:"originale"};
+let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pxAvatars:false,animations:true,theme:"night",police:"originale"};
 const FONTS=["originale","douce","nette"];
 function uiFamily(){return getComputedStyle(document.documentElement).getPropertyValue("--ui").trim()||"sans-serif";}
 function uiScale(){return localSettings.police==="douce"||localSettings.police==="nette"?1:.63;} // canvas text has no font-size-adjust
@@ -1785,7 +1785,7 @@ function syncSettingsUI(){
   document.querySelectorAll("#fs-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.fs===localSettings.fontSize);b.onclick=()=>{localSettings.fontSize=b.dataset.fs;saveSettings();syncSettingsUI();if(curTab==="stats")drawStatsChart();};});
   document.querySelectorAll("#font-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.font===(localSettings.police||"originale"));b.onclick=()=>{localSettings.police=b.dataset.font;saveSettings();syncSettingsUI();document.fonts.ready.then(()=>{if(curTab==="stats")drawStatsChart();});};});
   document.querySelectorAll("#theme-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.th===(localSettings.theme||"night"));b.onclick=()=>{if(b.dataset.th!==localSettings.theme)toggleTheme();syncSettingsUI();};});
-  $("set-pxav").classList.toggle("on",!!localSettings.pixelAvatars);
+  $("set-pxav").classList.toggle("on",!!localSettings.pxAvatars);
   $("set-anim").classList.toggle("on",!!localSettings.animations);
   $("bg-opacity").value=localSettings.bgOpacity||20;$("bg-opacity-val").textContent=(localSettings.bgOpacity||20)+"%";
   $("bg-remove").style.display=localSettings.bgImage?"inline-flex":"none";
@@ -1796,10 +1796,10 @@ function openSettings(){
   $("bg-file").onchange=async function(){const f=this.files[0];this.value="";if(!f)return;localSettings.bgImage=await compress(f,1920,0.85);saveSettings();syncSettingsUI();};
   openM("settModal");
 }
-function toggleSetting(k){localSettings[k]=!localSettings[k];saveSettings();syncSettingsUI();if(k==="pixelAvatars"){renderAcct();rAll();}}
+function toggleSetting(k){localSettings[k]=!localSettings[k];saveSettings();syncSettingsUI();if(k==="pxAvatars"){renderAcct();rAll();}}
 function setBgOpacity(v){localSettings.bgOpacity=parseInt(v);$("bg-opacity-val").textContent=v+"%";saveSettings();}
 function removeBg(){localSettings.bgImage=null;saveSettings();syncSettingsUI();}
-function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",police:"originale"};saveSettings();syncSettingsUI();renderAcct();rAll();}
+function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pxAvatars:false,animations:true,theme:"night",police:"originale"};saveSettings();syncSettingsUI();renderAcct();rAll();}
 
 // ── CROP TOOL ────────────────────────────────────────────────────────────────
 let _cropCb=null,_cropShape="square",_cropZoom=1,_cropOx=0,_cropOy=0,_cropDrag=false,_cropLx=0,_cropLy=0;
