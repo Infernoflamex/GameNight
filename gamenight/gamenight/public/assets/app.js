@@ -836,7 +836,7 @@ function rAccueil(){
   h+=`</div></div></div>`;
 
   // Wishes teaser + photos
-  const gw=groupWishes(players.map(p=>p.id),"all").slice(0,4);
+  const gw=groupWishes(players.map(p=>p.id),"all").filter(r=>r.score>0).slice(0,4);
   h+=`<div class="grid2">
     <div class="box"><div class="box-h" style="--hc:var(--pink)">${ic("heart",16)}<h3>Envies du groupe</h3><button class="more" onclick="go('envies')">Voir</button></div><div class="list">`;
   if(!gw.length)h+=`<div class="empty">${ic("face_ok",32)}<span>Personne n'a encore donné ses envies.</span><button class="btn sm" onclick="wishView='mine';go('envies')">${ic("heart",16)}Donner mes envies</button></div>`;
@@ -933,10 +933,13 @@ function rJeux(){
 }
 
 // ── ENVIES (wishes) ──────────────────────────────────────────────────────────
+const WISH_LEVELS=[3,2,1,0]; // 0 = "connais pas": shown, but never counted in the score
+const hasWish=v=>v!==undefined&&v!==null&&+v>=0&&+v<=3;
 const WISH={
   3:{short:"3/3",label:"Always Yes",icon:"face_happy",c:"#a7f070"},
   2:{short:"2/3",label:"S'il n'y a pas de choix pourquoi pas",icon:"face_ok",c:"#ffcd75"},
   1:{short:"1/3",label:"Raccourci",icon:"face_meh",c:"#ef7d57"},
+  0:{short:"?/3",label:"Connais pas le jeu",icon:"question",c:"#41a6f6"},
 };
 let wishView="group",wishType="all",wishPresent=null,wishFilter="all",wishSearch="";
 function wishesOf(pid){return players.find(p=>p.id===pid)?.wishes||{};}
@@ -944,8 +947,8 @@ function groupWishes(pids,type){
   const rows=[];
   ag().forEach(g=>{
     if(type!=="all"&&gType(g)!==type)return;
-    const v={3:[],2:[],1:[]};let score=0,n=0;
-    pids.forEach(pid=>{const w=+wishesOf(pid)[g.id];if(w>=1&&w<=3){v[w].push(pid);score+=w;n++;}});
+    const v={3:[],2:[],1:[],0:[]};let score=0,n=0;
+    pids.forEach(pid=>{const raw=wishesOf(pid)[g.id];if(hasWish(raw)){const w=+raw;v[w].push(pid);score+=w;n++;}});
     if(n)rows.push({g,v,score,n});
   });
   return rows.sort((a,b)=>b.score-a.score||b.v[3].length-a.v[3].length||a.g.name.localeCompare(b.g.name,"fr"));
@@ -972,7 +975,7 @@ function toggleWishPresent(pid){
 }
 function wishAll(on){wishPresent=on?players.map(p=>p.id):[];rEnvies();}
 function rEnvies(){
-  const legend=`<div class="legend box">${[3,2,1].map(l=>`<span class="it"><span class="lv" style="--wc:${WISH[l].c}">${WISH[l].short}</span>${ic(WISH[l].icon,16)}<b>${esc(WISH[l].label)}</b></span>`).join("")}</div>`;
+  const legend=`<div class="legend box">${WISH_LEVELS.map(l=>`<span class="it"><span class="lv" style="--wc:${WISH[l].c}">${WISH[l].short}</span>${ic(WISH[l].icon,16)}<b>${esc(WISH[l].label)}</b></span>`).join("")}</div>`;
   let h=`<div class="page-head"><h2 class="ptitle">${ic("heart",32)}Envies</h2>
     <div class="row">${seg([["group","Le groupe","players"],["mine","Mes envies","heart"]],wishView,"setWishView")}
     <button class="btn" onclick="openGameModal()" title="Ajouter un jeu au catalogue">${ic("plus",16)}Ajouter un jeu</button></div></div>
@@ -987,7 +990,8 @@ function renderGroupWishes(){
   h+=`</div><div class="row mt" style="margin-top:.7rem"><button class="linkbtn" onclick="wishAll(true)">Tout le monde</button><span class="muted">·</span><button class="linkbtn" onclick="wishAll(false)">Personne</button></div></div>`;
   h+=`<div class="row mb">${seg([["all","Tous"],["board","Société","meeple"],["online","En ligne","globe"]],wishType,"setWishType")}<span class="grow"></span>`;
   const rows=groupWishes(present,wishType);
-  if(rows.length)h+=`<button class="btn alt sm" onclick="wheelFromWishes()">${ic("wheel",16)}Roue avec le top ${Math.min(8,rows.length)}</button>`;
+  const wheelN=Math.min(8,rows.filter(r=>r.score>0).length);
+  if(wheelN>=2)h+=`<button class="btn alt sm" onclick="wheelFromWishes()">${ic("wheel",16)}Roue avec le top ${wheelN}</button>`;
   h+=`</div>`;
   const voters=present.filter(pid=>Object.keys(wishesOf(pid)).length);
   if(!present.length)return h+`<div class="empty box">${ic("players",32)}Sélectionne au moins une personne.</div>`;
@@ -996,7 +1000,7 @@ function renderGroupWishes(){
   const max=3*present.length;
   rows.forEach((r,i)=>{
     const unan=present.length>1&&r.v[3].length===present.length;
-    const grp=[3,2,1].filter(l=>r.v[l].length).map(l=>`<span class="grp" style="--wc:${WISH[l].c}" title="${esc(WISH[l].label)}">${ic(WISH[l].icon,16)}<span class="avs">${r.v[l].map(pid=>avatar(players.find(p=>p.id===pid),22)).join("")}</span></span>`).join("");
+    const grp=WISH_LEVELS.filter(l=>r.v[l].length).map(l=>`<span class="grp" style="--wc:${WISH[l].c}" title="${esc(WISH[l].label)}">${ic(WISH[l].icon,16)}<span class="avs">${r.v[l].map(pid=>avatar(players.find(p=>p.id===pid),22)).join("")}</span></span>`).join("");
     h+=`<div class="wrow box${unan?" g":""}"><span class="place">${medal(i,16)}</span>${gameArt(r.g,32,false)}
       <div class="grow"><div class="nm">${esc(r.g.name)}${unan?`<span class="unanime">Unanime</span>`:""}</div><div class="wvoters">${grp}</div></div>
       <div class="wscore"><span class="num">${r.score}<span class="muted" style="font-size:.6rem"> / ${max}</span></span>${bar(r.score/max*100,unan?"var(--lime)":"var(--yellow)")}</div></div>`;
@@ -1011,9 +1015,9 @@ function renderMyWishes(){
   }
   const mine=p.wishes||{};
   let games=ag().filter(g=>wishType==="all"||gType(g)===wishType);
-  const total=games.length,rated=games.filter(g=>mine[g.id]).length;
-  if(wishFilter==="todo")games=games.filter(g=>!mine[g.id]);
-  if(wishFilter==="done")games=games.filter(g=>mine[g.id]);
+  const total=games.length,rated=games.filter(g=>hasWish(mine[g.id])).length;
+  if(wishFilter==="todo")games=games.filter(g=>!hasWish(mine[g.id]));
+  if(wishFilter==="done")games=games.filter(g=>hasWish(mine[g.id]));
   const q=norm(wishSearch);if(q)games=games.filter(g=>norm(g.name).includes(q));
   games.sort((a,b)=>a.name.localeCompare(b.name,"fr"));
   let h=`<div class="progress">${avatar(p,32)}<span>Tu as noté <b style="color:var(--yellow)">${rated}</b> jeux sur ${total}.</span><div class="grow" style="max-width:260px">${bar(total?rated/total*100:0,"var(--lime)")}</div></div>
@@ -1022,9 +1026,9 @@ function renderMyWishes(){
     <input type="search" id="wish-q" placeholder="Rechercher un jeu…" value="${esc(wishSearch)}" style="max-width:240px" oninput="wishSearch=this.value;rEnviesKeepFocus()"/></div>`;
   if(!games.length)return h+`<div class="empty box">${ic("search",32)}Aucun jeu ici.</div>`;
   games.forEach(g=>{
-    const cur=+mine[g.id]||0;
+    const cur=hasWish(mine[g.id])?+mine[g.id]:null;
     h+=`<div class="wrow box">${gameArt(g,32,false)}<div class="grow"><div class="nm">${esc(g.name)}</div><div class="sub muted">${gType(g)==="online"?"Jeu en ligne":"Jeu de société"}</div></div>
-      <div class="wvote">${[3,2,1].map(l=>`<button class="wbtn${cur===l?" on":""}" style="--wc:${WISH[l].c}" onclick="setWish('${g.id}',${l})" title="${esc(WISH[l].short+" · "+WISH[l].label)}">${ic(WISH[l].icon,16)}<span>${WISH[l].short}</span><span class="txt">${esc(WISH[l].label)}</span></button>`).join("")}</div></div>`;
+      <div class="wvote">${WISH_LEVELS.map(l=>`<button class="wbtn${cur===l?" on":""}" style="--wc:${WISH[l].c}" onclick="setWish('${g.id}',${l})" title="${esc(WISH[l].short+" · "+WISH[l].label)}">${ic(WISH[l].icon,16)}<span>${WISH[l].short}</span><span class="txt">${esc(WISH[l].label)}</span></button>`).join("")}</div></div>`;
   });
   return h;
 }
@@ -1035,7 +1039,7 @@ function rEnviesKeepFocus(){
 }
 function wheelFromWishes(){
   const present=wishPresent||players.map(p=>p.id);
-  const rows=groupWishes(present,wishType).slice(0,8);
+  const rows=groupWishes(present,wishType).filter(r=>r.score>0).slice(0,8);
   if(!rows.length)return;
   openWheelModal();wPlayerSel=[...present];wList=rows.map(r=>r.g.id);goWheelSpin();
 }
@@ -1459,11 +1463,11 @@ function openDetail(gid){
       <button class="btn sm" onclick="cm('dModal');openMatchModal();setTimeout(()=>{const s=$('m-game');if(s)s.value='${gid}'},120)">${ic("plus",16)}Partie</button>
       ${loggedIn()?`<button class="btn ghost sm" onclick="cm('dModal');openEG('${gid}')">${ic("pencil",16)}Modifier</button>`:""}</div></div>`;
   // Wishes for this game
-  const w={3:[],2:[],1:[]};players.forEach(p=>{const v=+wishesOf(p.id)[gid];if(v)w[v].push(p);});
-  const mineW=me()?+wishesOf(me())[gid]||0:0;
+  const w={3:[],2:[],1:[],0:[]};players.forEach(p=>{const v=wishesOf(p.id)[gid];if(hasWish(v))w[+v].push(p);});
+  const mineW=me()&&hasWish(wishesOf(me())[gid])?+wishesOf(me())[gid]:null;
   h+=`<div class="box-h" style="--hc:var(--pink);margin:0 -1.15rem .6rem">${ic("heart",16)}<h3>Envies</h3></div>`;
-  h+=`<div class="wvoters mb">${[3,2,1].map(l=>`<span class="grp">${ic(WISH[l].icon,16)}<b style="color:${WISH[l].c};font-size:.85rem">${WISH[l].short}</b><span class="avs">${w[l].length?w[l].map(p=>avatar(p,22)).join(""):`<span class="muted">—</span>`}</span></span>`).join("")}</div>`;
-  if(me())h+=`<div class="wvote mb">${[3,2,1].map(l=>`<button class="wbtn${mineW===l?" on":""}" style="--wc:${WISH[l].c}" onclick="setWish('${gid}',${l});openDetail('${gid}')">${ic(WISH[l].icon,16)}${WISH[l].short}</button>`).join("")}<span class="muted" style="align-self:center;margin-left:.4rem;font-size:.88rem">ton avis</span></div>`;
+  h+=`<div class="wvoters mb">${WISH_LEVELS.map(l=>`<span class="grp">${ic(WISH[l].icon,16)}<b style="color:${WISH[l].c};font-size:.85rem">${WISH[l].short}</b><span class="avs">${w[l].length?w[l].map(p=>avatar(p,22)).join(""):`<span class="muted">—</span>`}</span></span>`).join("")}</div>`;
+  if(me())h+=`<div class="wvote mb">${WISH_LEVELS.map(l=>`<button class="wbtn${mineW===l?" on":""}" style="--wc:${WISH[l].c}" onclick="setWish('${gid}',${l});openDetail('${gid}')">${ic(WISH[l].icon,16)}${WISH[l].short}</button>`).join("")}<span class="muted" style="align-self:center;margin-left:.4rem;font-size:.88rem">ton avis</span></div>`;
   // Palmares
   h+=`<div class="box-h" style="margin:0 -1.15rem .2rem">${ic("trophy",16)}<h3>Palmarès</h3></div>`;
   if(!rows.length)h+=`<div class="empty">${ic("dice",32)}Personne n'y a encore joué.</div>`;
@@ -1508,7 +1512,7 @@ function openWheelModal(){
   wStep(0);openM("wModal");
 }
 function wPresetIds(kind){
-  if(kind==="wish")return groupWishes(wPlayerSel,"all").slice(0,8).map(r=>r.g.id);
+  if(kind==="wish")return groupWishes(wPlayerSel,"all").filter(r=>r.score>0).slice(0,8).map(r=>r.g.id);
   if(kind==="played"){
     const s=new Set();feed.forEach(f=>{if(!wPlayerSel.length||(f.playerIds||[]).some(pid=>wPlayerSel.includes(pid)))s.add(f.gameId);});
     return ag().filter(g=>s.has(g.id)).map(g=>g.id);

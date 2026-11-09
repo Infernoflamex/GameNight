@@ -448,7 +448,7 @@ input[type=range]{accent-color:var(--yellow)}
 .wbtn.on{background:var(--wc);color:var(--bg);box-shadow:inset 0 -3px 0 0 rgba(0,0,0,.22)}
 .wbtn.on .pxi{filter:none;opacity:1}
 .wbtn .txt{max-width:0;overflow:hidden;white-space:nowrap;transition:max-width .15s}
-@media(min-width:880px){.wbtn .txt{max-width:360px}}
+@media(min-width:880px){.wbtn.on .txt{max-width:360px}}
 .wscore{display:flex;flex-direction:column;align-items:flex-end;gap:.35rem;flex-shrink:0;min-width:110px}
 .wscore .num{font-size:calc(.8rem*var(--dz));color:var(--yellow)}
 .wscore .bar{flex:none;width:120px}
