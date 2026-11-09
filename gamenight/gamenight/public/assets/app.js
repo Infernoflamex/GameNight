@@ -481,7 +481,7 @@ function avatar(p,size=32){
   const box=`width:${size}px;height:${size}px`;
   if(!p)return`<span class="av" style="${box}"></span>`;
   if(p.photo){const s=avSrc(p);return`<span class="av" style="${box}" title="${esc(p.name)}"><img${s.px?' class="pxav"':""} src="${s.url}" alt=""></span>`;}
-  return`<span class="av" style="${box};background:${esc(p.color||"#94b0c2")};font-size:${Math.max(8,Math.round(size*.36))}px" title="${esc(p.name)}">${esc(initial(p.name))}</span>`;
+  return`<span class="av" style="${box};background:${esc(p.color||"#94b0c2")};font-size:calc(${Math.max(8,Math.round(size*.36))}px*var(--dz))" title="${esc(p.name)}">${esc(initial(p.name))}</span>`;
 }
 const pname=pid=>players.find(p=>p.id===pid)?.name||"?";
 
@@ -760,7 +760,7 @@ function rAccueil(){
     const rk=getRank(p.points);
     h+=`<div class="lrow${p.showBanner?" banner":""}" style="--rc:${RANK_COLORS[rk.cls]||"#94b0c2"}"><span class="place">${medal(i,16)}</span>${avatar(p,36)}
       <div class="grow"><div class="nm ell">${esc(p.name)}</div><div style="margin-top:.25rem">${rankTag(p.points)}</div></div>
-      <div class="end"><div class="num" style="font-size:.75rem;color:var(--yellow)">${p.points} ${ic("star",16)}</div><div class="sub">${p.victoires} victoires</div></div></div>`;
+      <div class="end"><div class="num" style="font-size:calc(.75rem*var(--dz));color:var(--yellow)">${p.points} ${ic("star",16)}</div><div class="sub">${p.victoires} victoires</div></div></div>`;
   });
   h+=`</div></div>
     <div class="box"><div class="box-h" style="--hc:var(--orange)">${ic("scroll",16)}<h3>Dernières parties</h3><button class="more" onclick="go('historique')">Historique</button></div><div class="list">`;
@@ -1389,7 +1389,7 @@ function openDetail(gid){
   $("d-ic").innerHTML=ic(gIcon(g),16);$("d-title").textContent=g.name;
   let h=`<div class="row mb" style="gap:1rem;align-items:stretch"><div style="width:120px;flex-shrink:0">${gameArt(g,64,true,"height:96px")}</div>
     <div class="grow"><div class="row" style="gap:.4rem"><span class="tag${gType(g)==="online"?" on":""}">${ic(gType(g)==="online"?"globe":"meeple",16)}${gType(g)==="online"?"Jeu en ligne":"Jeu de société"}</span></div>
-      <div class="num" style="font-size:1.1rem;color:var(--cyan);margin-top:.6rem">${total}</div><div class="muted">partie${total>1?"s":""} jouée${total>1?"s":""}</div></div>
+      <div class="num" style="font-size:calc(1.1rem*var(--dz));color:var(--cyan);margin-top:.6rem">${total}</div><div class="muted">partie${total>1?"s":""} jouée${total>1?"s":""}</div></div>
     <div style="display:flex;flex-direction:column;gap:.2rem;align-items:flex-end">
       <button class="btn sm" onclick="cm('dModal');openMatchModal();setTimeout(()=>{const s=$('m-game');if(s)s.value='${gid}'},120)">${ic("plus",16)}Partie</button>
       ${loggedIn()?`<button class="btn ghost sm" onclick="cm('dModal');openEG('${gid}')">${ic("pencil",16)}Modifier</button>`:""}</div></div>`;
@@ -1489,7 +1489,7 @@ function drawWheel(ang){
     ctx.strokeStyle="#0c0d18";ctx.lineWidth=3;ctx.stroke();
     ctx.save();ctx.translate(cx,cy);ctx.rotate(s+seg/2);
     if(showIc){const im=wImg(gIcon(g));if(im.complete&&im.naturalWidth){ctx.save();ctx.translate(r-26,0);ctx.rotate(Math.PI/2);ctx.drawImage(im,-16,-16,32,32);ctx.restore();}}
-    ctx.fillStyle="#1a1c2c";ctx.font=`600 ${n>18?12:15}px 'Pixelify Sans',sans-serif`;ctx.textAlign="right";ctx.textBaseline="middle";
+    ctx.fillStyle="#1a1c2c";ctx.font=`600 ${n>18?12:15}px ${uiFamily()}`;ctx.textAlign="right";ctx.textBaseline="middle";
     const max=n>18?16:20;const label=g.name.length>max?g.name.slice(0,max-1)+"…":g.name;
     ctx.fillText(label,showIc?r-50:r-14,1);ctx.restore();
   });
@@ -1607,7 +1607,7 @@ function drawStatsChart(){
   const cx=i=>PAD.left+(i/(numPts-1||1))*W;
   const cy=v=>isRank?PAD.top+((v-yMin)/(yMax-yMin))*Hh:PAD.top+Hh-(v/yMax)*Hh;
   ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#1a1c2c";ctx.fillRect(0,0,cssW,cssH);
-  ctx.font="500 12px 'Pixelify Sans',sans-serif";
+  ctx.font="500 12px "+uiFamily();
   yTicks.forEach(y=>{ctx.fillStyle="rgba(255,255,255,.06)";ctx.fillRect(PAD.left,Math.round(cy(y)),W,2);ctx.fillStyle="#7387a8";ctx.textAlign="right";ctx.fillText(isRank?(y===1?"1er":y+"e"):String(y),PAD.left-8,cy(y)+4);});
   ctx.textAlign="center";xTicks.forEach(i=>{const raw=entries[i-1];ctx.fillStyle="#7387a8";ctx.fillText(i===0?"":fdShort(raw?.date),cx(i),PAD.top+Hh+20);});
   ctx.fillStyle="#3a4470";ctx.fillRect(PAD.left-2,PAD.top,2,Hh+2);ctx.fillRect(PAD.left-2,PAD.top+Hh,W+2,2);
@@ -1615,7 +1615,7 @@ function drawStatsChart(){
     ctx.strokeStyle="#0c0d18";ctx.lineWidth=6;ctx.lineJoin="miter";ctx.beginPath();s.vals.forEach((v,i)=>i?ctx.lineTo(cx(i),cy(v)):ctx.moveTo(cx(i),cy(v)));ctx.stroke();
     ctx.strokeStyle=s.color;ctx.lineWidth=3;ctx.beginPath();s.vals.forEach((v,i)=>i?ctx.lineTo(cx(i),cy(v)):ctx.moveTo(cx(i),cy(v)));ctx.stroke();
     xTicks.forEach(i=>{if(i>=s.vals.length)return;ctx.fillStyle="#0c0d18";ctx.fillRect(cx(i)-5,cy(s.vals[i])-5,10,10);ctx.fillStyle=s.color;ctx.fillRect(cx(i)-3,cy(s.vals[i])-3,6,6);});
-    if(stShowLabels){const li=s.vals.length-1;ctx.fillStyle=s.color;ctx.textAlign="left";ctx.font="600 12px 'Pixelify Sans',sans-serif";ctx.fillText(s.name.length>10?s.name.slice(0,9)+"…":s.name,cx(li)+8,cy(s.vals[li])+4);ctx.font="500 12px 'Pixelify Sans',sans-serif";}
+    if(stShowLabels){const li=s.vals.length-1;ctx.fillStyle=s.color;ctx.textAlign="left";ctx.font="600 12px "+uiFamily();ctx.fillText(s.name.length>10?s.name.slice(0,9)+"…":s.name,cx(li)+8,cy(s.vals[li])+4);ctx.font="500 12px "+uiFamily();}
   });
   stChart={series,numPts,PAD,W,Hh};
   const tip=$("st-tooltip");
@@ -1637,7 +1637,9 @@ window.addEventListener("resize",()=>{clearTimeout(resizeT);resizeT=setTimeout((
 
 // ── SETTINGS (this device only) ──────────────────────────────────────────────
 const SETT_KEY="gn_settings";
-let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night"};
+let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",font:"douce"};
+const FONTS=["douce","nette","pixel"];
+function uiFamily(){return getComputedStyle(document.documentElement).getPropertyValue("--ui").trim()||"sans-serif";}
 function loadSettings(){try{const s=localStorage.getItem(SETT_KEY);if(s)localSettings={...localSettings,...JSON.parse(s)};}catch(e){}applySettings();}
 function saveSettings(){try{localStorage.setItem(SETT_KEY,JSON.stringify(localSettings));}catch(e){}applySettings();}
 function applySettings(){
@@ -1646,6 +1648,7 @@ function applySettings(){
   if(localSettings.bgImage){bg.style.backgroundImage=`url(${localSettings.bgImage})`;bg.style.opacity=(localSettings.bgOpacity||20)/100;bg.style.display="block";}
   else bg.style.display="none";
   document.body.classList.toggle("calm",!localSettings.animations);
+  document.documentElement.dataset.font=FONTS.includes(localSettings.font)?localSettings.font:"douce";
   const th=localSettings.theme==="sunset"?"sunset":"night";
   document.documentElement.dataset.theme=th;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",th==="sunset"?"#26172a":"#1a1c2c");
@@ -1659,6 +1662,7 @@ function toggleTheme(){
 }
 function syncSettingsUI(){
   document.querySelectorAll("#fs-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.fs===localSettings.fontSize);b.onclick=()=>{localSettings.fontSize=b.dataset.fs;saveSettings();syncSettingsUI();if(curTab==="stats")drawStatsChart();};});
+  document.querySelectorAll("#font-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.font===(localSettings.font||"douce"));b.onclick=()=>{localSettings.font=b.dataset.font;saveSettings();syncSettingsUI();document.fonts.ready.then(()=>{if(curTab==="stats")drawStatsChart();});};});
   document.querySelectorAll("#theme-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.th===(localSettings.theme||"night"));b.onclick=()=>{if(b.dataset.th!==localSettings.theme)toggleTheme();syncSettingsUI();};});
   $("set-pxav").classList.toggle("on",!!localSettings.pixelAvatars);
   $("set-anim").classList.toggle("on",!!localSettings.animations);
@@ -1673,7 +1677,7 @@ function openSettings(){
 function toggleSetting(k){localSettings[k]=!localSettings[k];saveSettings();syncSettingsUI();if(k==="pixelAvatars"){renderAcct();rAll();}}
 function setBgOpacity(v){localSettings.bgOpacity=parseInt(v);$("bg-opacity-val").textContent=v+"%";saveSettings();}
 function removeBg(){localSettings.bgImage=null;saveSettings();syncSettingsUI();}
-function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night"};saveSettings();syncSettingsUI();renderAcct();rAll();}
+function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night",font:"douce"};saveSettings();syncSettingsUI();renderAcct();rAll();}
 
 // ── CROP TOOL ────────────────────────────────────────────────────────────────
 let _cropCb=null,_cropShape="square",_cropZoom=1,_cropOx=0,_cropOy=0,_cropDrag=false,_cropLx=0,_cropLy=0;
