@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="assets/style.css?v=20261109"/>
+<link rel="stylesheet" href="assets/style.css?v=20261109b"/>
 </head>
 <body>
 <div id="bg-layer"></div>
@@ -24,6 +24,7 @@
       </button>
       <div class="hdr-actions">
         <span id="sync" class="sync" title="Synchronisation"><i></i><span class="lbl" id="synctxt">Connexion…</span></span>
+        <button class="btn ghost sm sq" id="theme-btn" onclick="toggleTheme()" title="Changer d'ambiance" aria-label="Changer d'ambiance"><span data-ic="sun" data-s="16"></span></button>
         <button class="btn ghost sm sq" onclick="openSettings()" title="Réglages" aria-label="Réglages"><span data-ic="gear" data-s="16"></span></button>
         <span id="acct-slot"></span>
         <button class="btn sm" onclick="openMatchModal()"><span data-ic="plus" data-s="16"></span><span class="lbl">Partie</span></button>
@@ -95,7 +96,7 @@
   <div class="mhead"><span data-ic="key" data-s="16"></span><span class="mtitle" id="pw-title">Mot de passe</span><button class="ibtn" onclick="cm('pwModal')" aria-label="Fermer"><span data-ic="cross" data-s="16"></span></button></div>
   <form onsubmit="event.preventDefault();submitPw()">
     <div class="field" id="pw-cur-row"><label class="flabel" for="pw-cur">Mot de passe actuel</label><input type="password" id="pw-cur" autocomplete="current-password" autocapitalize="none" spellcheck="false"/></div>
-    <div class="field"><label class="flabel" for="pw-new">Nouveau mot de passe</label><input type="password" id="pw-new" autocomplete="new-password" autocapitalize="none" spellcheck="false"/><div class="hint">4 caractères minimum. Évite ton mot de passe de banque, on reste entre potes.</div></div>
+    <div class="field"><label class="flabel" for="pw-new">Nouveau mot de passe</label><input type="password" id="pw-new" autocomplete="new-password" autocapitalize="none" spellcheck="false"/><div class="hint">6 caractères minimum.</div></div>
     <div class="field"><label class="flabel" for="pw-new2">Confirmer</label><input type="password" id="pw-new2" autocomplete="new-password" autocapitalize="none" spellcheck="false"/><div id="pw-err" class="err"></div></div>
     <div class="mfoot"><button type="button" class="btn ghost" onclick="cm('pwModal')">Annuler</button><button type="submit" class="btn ok"><span data-ic="check" data-s="16"></span>Enregistrer</button></div>
   </form>
@@ -284,12 +285,21 @@
  <div class="modal box">
   <div class="mhead"><span data-ic="gear" data-s="16"></span><span class="mtitle">Réglages</span><button class="ibtn" onclick="cm('settModal')" aria-label="Fermer"><span data-ic="cross" data-s="16"></span></button></div>
   <div class="reason" style="box-shadow:inset var(--px) 0 0 0 var(--sky)">Ces réglages restent sur cet appareil. Ils ne changent rien pour les autres.</div>
+  <div class="srow"><div><div class="t">Ambiance</div><div class="d">Nuit étoilée ou coucher de soleil</div></div><div class="seg" id="theme-seg"><button data-th="night">Nuit</button><button data-th="sunset">Coucher de soleil</button></div></div>
   <div class="srow"><div><div class="t">Taille du texte</div><div class="d">Pour lire sans plisser les yeux</div></div><div class="seg" id="fs-seg"><button data-fs="small">Petit</button><button data-fs="normal">Normal</button><button data-fs="large">Grand</button></div></div>
   <div class="srow"><div><div class="t">Avatars pixelisés</div><div class="d">Transforme les photos de profil en portraits pixel</div></div><button class="toggle" id="set-pxav" onclick="toggleSetting('pixelAvatars')" aria-label="Avatars pixelisés"></button></div>
   <div class="srow"><div><div class="t">Animations</div><div class="d">Étoiles, mascotte, dés qui roulent…</div></div><button class="toggle" id="set-anim" onclick="toggleSetting('animations')" aria-label="Animations"></button></div>
   <div class="srow"><div><div class="t">Image de fond</div><div class="d">Visible uniquement chez toi</div></div><div class="row"><label class="btn ghost sm" style="cursor:pointer"><span data-ic="photo" data-s="16"></span>Choisir<input type="file" id="bg-file" accept="image/*" hidden/></label><button class="btn danger sm" id="bg-remove" onclick="removeBg()" style="display:none">Retirer</button></div></div>
   <div class="srow" style="box-shadow:none"><div><div class="t">Opacité du fond</div><div class="d">Si une image de fond est active</div></div><div class="row"><input type="range" id="bg-opacity" min="5" max="60" value="20" style="width:120px" oninput="setBgOpacity(this.value)"/><span id="bg-opacity-val" class="muted" style="min-width:3em">20%</span></div></div>
   <div class="mfoot"><button class="btn ghost" onclick="resetSettings()">Réinitialiser</button><button class="btn" onclick="cm('settModal')">Fermer</button></div>
+ </div>
+</div>
+
+<!-- BOARD GAME ARENA IMPORT (content rendered by bgaRender in app.js) -->
+<div id="bgaModal" class="ov" data-close>
+ <div class="modal box wide">
+  <div class="mhead"><span data-ic="globe" data-s="16"></span><span class="mtitle">Import Board Game Arena</span><button class="ibtn" onclick="cm('bgaModal')" aria-label="Fermer"><span data-ic="cross" data-s="16"></span></button></div>
+  <div id="bga-body"></div>
  </div>
 </div>
 
@@ -303,8 +313,9 @@
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
-<script src="assets/icons.js?v=20261109"></script>
-<script src="assets/app.js?v=20261109"></script>
+<script src="assets/icons.js?v=20261109b"></script>
+<script src="assets/app.js?v=20261109b"></script>
 </body>
 </html>

@@ -269,36 +269,44 @@ const FIREBASE_CONFIG={
   messagingSenderId:"1053785811460",
   appId:"1:1053785811460:web:085e00b1bf826db3042351"
 };
+// Accounts are Firebase Authentication email/password accounts. Players never see the email:
+// each player record stores its account email + uid, they just pick their profile and type a password.
+const ACCOUNT_DOMAIN="gamelab-night.web.app";
+const ADMIN_EMAIL="admin@"+ACCOUNT_DOMAIN;
 let players=[],customs=[],feed=[],gameImages={};
-let playerKeys={}; // player id → key under /gamenight/players (for small targeted writes)
-let dbRef=null,loaded=false;
+let playerKeys={},feedKeys={},customKeys={}; // item id → key in the database
+let rootRef=null,dbRef=null,loaded=false;
 
 function setSync(state,txt){const el=$("sync");if(!el)return;el.className="sync "+state;$("synctxt").textContent=txt;el.title=txt;}
-function sv(){
-  if(!dbRef){toast("Hors ligne : rien n'a été enregistré","err","cross");return Promise.resolve();}
+const clean=v=>v===undefined?null:JSON.parse(JSON.stringify(v));
+// Every save is a small targeted write, so the database rules can check who is allowed to make it.
+function dbw(fn,okMsg){
+  if(!dbRef){toast("Hors ligne : rien n'a été enregistré","err","cross");return Promise.resolve(false);}
   setSync("saving","Sauvegarde…");
-  return dbRef.set(JSON.parse(JSON.stringify({players,customs,feed,gameImages})))
-    .then(()=>{setSync("ok","Enregistré");setTimeout(()=>setSync("ok","En ligne"),2000);})
-    .catch(e=>{console.error(e);setSync("err","Erreur");toast("Erreur de sauvegarde","err","cross");});
+  let p;try{p=Promise.resolve(fn());}catch(e){p=Promise.reject(e);}
+  return p.then(()=>{setSync("ok","Enregistré");setTimeout(()=>setSync("ok","En ligne"),1800);if(okMsg)toast(okMsg[0],"ok",okMsg[1]);return true;})
+    .catch(e=>{
+      console.error(e);setSync("err","Refusé");
+      const denied=/permission/i.test(String(e&&(e.code||e.message)));
+      toast(denied?"Action refusée : reconnecte-toi":"Erreur de sauvegarde","err","cross");return false;
+    });
 }
-// Write a single value inside a player (wishes, password, pinned badges) without resending the whole database.
 function svPlayer(pid,sub,val){
-  const key=playerKeys[pid];
-  if(!dbRef||key===undefined)return sv();
-  setSync("saving","Sauvegarde…");
-  return dbRef.child(`players/${key}/${sub}`).set(val===undefined?null:val)
-    .then(()=>setSync("ok","En ligne"))
-    .catch(e=>{console.error(e);setSync("err","Erreur");toast("Erreur de sauvegarde","err","cross");});
+  const k=playerKeys[pid];if(k===undefined)return Promise.resolve(false);
+  return dbw(()=>dbRef.child(`players/${k}/${sub}`).set(clean(val)));
 }
 function initFirebase(){
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
-    dbRef=firebase.database().ref("gamenight");
+    rootRef=firebase.database().ref();dbRef=rootRef.child("gamenight");
     firebase.database().ref(".info/connected").on("value",s=>{if(!loaded)return;s.val()?setSync("ok","En ligne"):setSync("err","Hors ligne");});
+    firebase.auth().onAuthStateChanged(u=>{onAuth(u);});
     dbRef.on("value",snap=>{
       const d=snap.val()||{};
-      playerKeys={};
+      playerKeys={};feedKeys={};customKeys={};
       snap.child("players").forEach(c=>{const v=c.val();if(v&&v.id)playerKeys[v.id]=c.key;});
+      snap.child("feed").forEach(c=>{const v=c.val();if(v&&v.id)feedKeys[v.id]=c.key;});
+      snap.child("customs").forEach(c=>{const v=c.val();if(v&&v.id)customKeys[v.id]=c.key;});
       players=arr(d.players);customs=arr(d.customs);feed=arr(d.feed);gameImages=d.gameImages||{};
       loaded=true;
       onData();
@@ -308,56 +316,32 @@ function initFirebase(){
 }
 function onData(){
   rbs();badgeCache.clear();
-  validateSession();
   renderAcct();
   rAll();
+  bgaOnData();
 }
 
-// ── AUTH (per-profile passwords) ─────────────────────────────────────────────
-// Passwords are never stored: only salted PBKDF2-SHA256 hashes. DEFAULT_PW holds the
-// initial hashes; once a player changes their password the new hash lives in player.pw.
-const PW_ITER=100000;
-const DEFAULT_PW=/*DEFAULT_PW_START*/{
-  "1773096998384":{s:"HXuMBZRYTKRj1bqf08VRyw==",h:"bzO7MrOl/dKgKCWzFH0YEU0DC4//CYhv8bb3pwEuVa8="},
-  "1773097059562":{s:"b/RLQOfrG551lINw6sbhFw==",h:"6aXdm/FxyI4zi6qW5QZSpsARqmjxtGFhEGXwAjIKwso="},
-  "1773098144873":{s:"xyk8d4e1HCunHHs9uPJd7w==",h:"eiIrtzqHSZ1UDT+ZyIhtkmEys28Rifm+BYyjAuMvcUQ="},
-  "1773156302178":{s:"D29rkbJCtD3H08Jxh4jTgg==",h:"Qiy598Qljy+M3UrWthBbhBTKM8x0lkNi4RHJEMmrwlo="},
-  "1773237721269":{s:"rG/R753YqfxiBYY1ID2/Dw==",h:"0sexhqfHpuZBtQgxq/mR+t/yR/10W5qjLYcBrgx3JZM="},
-  "1775483097994":{s:"6aEAD88PO8fO0hFr+iyKZw==",h:"kdywnFf7JyhVuZ1uLICMpWYwwGmRdCJb5xlwJK/Xxd4="},
-  "1775775071927":{s:"jCBWsc6JET2usyDh+vCMwQ==",h:"sl18zXIWDIbII/2HEVglIFEuGOzq16lLKxd6e8VtNxo="},
-  "1775775162268":{s:"Wm8qDcwHWWVP/Hqi95tp7Q==",h:"levjvt2iCaEXai5vjLWs5JuxlOk9HXqxrHFdtTe2nvE="},
-  "1775802152701":{s:"FoUJl9H+Otv9rMLI9M+LbQ==",h:"wg+v6Pmx8uUbfnT5fjiPNj4DDeos5x1Pjym8ScYwaQ0="},
-  "1776883835295":{s:"gVc4G7bkcfEsnx6Fvupm2A==",h:"DcCG4KGybCpo+faluQHBhuJ/L6+mDOdJg7gbum3liI8="},
-  "1777639688320":{s:"B0hO7rSZCJ2Re+cxuduWlQ==",h:"ECxWOm27rrlMnqfVWU6dfDemKMJUUcnJd4/ZC0jknH4="},
-  "1777927825554":{s:"CkA8BsYftYTVDtawFJ7euQ==",h:"pKAsISmj2iiS+V3yqzbLVD5ZpkYe1IrkkW3bDy5hVbI="}
-}/*DEFAULT_PW_END*/;
-const ADMIN_PW=/*ADMIN_PW_START*/{s:"Ab9H/8qjMMZrHJe+iwMksQ==",h:"ieXggmv65sNTgYZgchRq9s7skidCYBLUWZoPw0l2N8M="}/*ADMIN_PW_END*/;
-const SESSION_KEY="gn_session_v2";
-let session=null;
-function b64(u8){let s="";u8.forEach(b=>s+=String.fromCharCode(b));return btoa(s);}
-function unb64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0));}
-async function derive(pw,salt){
-  const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);
-  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:unb64(salt),iterations:PW_ITER},k,256);
-  return b64(new Uint8Array(bits));
+// ── AUTH (Firebase Authentication) ───────────────────────────────────────────
+let authUser=null,adminFlag=false;
+async function onAuth(u){
+  authUser=u||null;adminFlag=false;
+  if(u){try{adminFlag=(await rootRef.child("gamenight_admins/"+u.uid).once("value")).val()===true;}catch(e){adminFlag=false;}}
+  renderAcct();if(loaded)rAll();
 }
-async function makeRecord(pw){const s=b64(crypto.getRandomValues(new Uint8Array(16)));return{s,h:await derive(pw,s)};}
-function pwRecord(pid){const p=players.find(x=>x.id===pid);return p&&p.pw&&p.pw.h?p.pw:(DEFAULT_PW[pid]||null);}
-async function checkPw(rec,pw){if(!rec||!rec.h)return false;try{return(await derive(pw,rec.s))===rec.h;}catch(e){console.error(e);return false;}}
-function me(){return session&&session.pid&&players.some(p=>p.id===session.pid)?session.pid:null;}
+function me(){if(!authUser)return null;const p=players.find(x=>x.uid===authUser.uid);return p?p.id:null;}
 function meP(){const id=me();return id?players.find(p=>p.id===id):null;}
-function isAdmin(){return!!(session&&session.admin&&ADMIN_PW.h&&session.h===ADMIN_PW.h);}
+function isAdmin(){return!!(authUser&&adminFlag);}
 function loggedIn(){return!!(me()||isAdmin());}
 function canEdit(pid){return isAdmin()||me()===pid;}
-function loadSession(){try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(e){session=null;}}
-function saveSession(){try{session?localStorage.setItem(SESSION_KEY,JSON.stringify(session)):localStorage.removeItem(SESSION_KEY);}catch(e){}}
-function validateSession(){
-  if(!session)return;
-  if(session.admin){if(session.h!==ADMIN_PW.h){session=null;saveSession();}return;}
-  const rec=pwRecord(session.pid);
-  if(!rec||rec.h!==session.h||!players.some(p=>p.id===session.pid)){
-    session=null;saveSession();toast("Ta session a expiré, reconnecte-toi","warn","lock");
-  }
+function authErr(e){
+  const c=String(e&&e.code||"");
+  if(/wrong-password|invalid-credential|invalid-login|user-not-found|invalid-password|invalid-email/.test(c))return"Mot de passe incorrect.";
+  if(/too-many-requests/.test(c))return"Trop d'essais. Réessaie dans quelques minutes.";
+  if(/network/.test(c))return"Pas de connexion internet.";
+  if(/weak-password/.test(c))return"Mot de passe trop faible : 6 caractères minimum.";
+  if(/requires-recent-login/.test(c))return"Reconnecte-toi puis réessaie.";
+  if(/operation-not-allowed|configuration-not-found|admin-restricted/.test(c))return"Les comptes ne sont pas activés côté Firebase.";
+  return"Erreur : "+(e&&e.message||c);
 }
 function requireLogin(reason,then){if(loggedIn()){then();return;}openLogin(reason,then);}
 function requireEdit(pid,then){
@@ -388,23 +372,23 @@ function setLoginMode(){
 }
 function shake(el){el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");}
 async function doLogin(){
-  const pw=$("login-pw").value.trim(),err=$("login-err");
+  const pw=$("login-pw").value.trim(),err=$("login-err"),btn=$("login-go");
   if(!loginAdmin&&!loginSel){err.textContent="Choisis d'abord ton profil.";shake($("login-who"));return;}
   if(!pw){err.textContent="Entre ton mot de passe.";$("login-pw").focus();return;}
-  const rec=loginAdmin?ADMIN_PW:pwRecord(loginSel);
-  if(!rec||!rec.h){err.textContent="Ce profil n'a pas encore de mot de passe : demande à l'admin.";return;}
-  const btn=$("login-go");btn.disabled=true;err.textContent="Vérification…";
-  const ok=await checkPw(rec,pw);
+  let email=ADMIN_EMAIL;
+  if(!loginAdmin){const p=players.find(x=>x.id===loginSel);email=p&&p.email;if(!email){err.textContent="Ce profil n'a pas encore de compte : demande à l'admin.";return;}}
+  btn.disabled=true;err.textContent="Vérification…";
+  try{const c=await firebase.auth().signInWithEmailAndPassword(email,pw);await onAuth(c.user);}
+  catch(e){btn.disabled=false;err.textContent=authErr(e);shake($("login-form"));$("login-pw").select();return;}
   btn.disabled=false;
-  if(!ok){err.textContent="Mot de passe incorrect.";shake($("login-form"));$("login-pw").select();return;}
-  err.textContent="";
-  session=loginAdmin?{admin:true,h:rec.h}:{pid:loginSel,h:rec.h};saveSession();
-  cm("loginModal");renderAcct();rAll();
+  if(loginAdmin&&!isAdmin()){err.textContent="Ce compte n'a pas les droits admin.";await firebase.auth().signOut();return;}
+  if(!loginAdmin&&me()!==loginSel){err.textContent="Ce compte n'est pas relié à ce profil : demande à l'admin.";await firebase.auth().signOut();return;}
+  err.textContent="";cm("loginModal");
   const p=meP();
   toast(loginAdmin?"Mode admin activé":`Salut ${p?p.name:""} !`,"ok",loginAdmin?"crown":"face_happy");
   const t=loginThen;loginThen=null;if(t)setTimeout(t,60);
 }
-function logout(){session=null;saveSession();closeMenu();renderAcct();rAll();toast("À la prochaine !","ok","logout");}
+async function logout(){closeMenu();try{await firebase.auth().signOut();}catch(e){}toast("À la prochaine !","ok","logout");}
 
 function renderAcct(){
   const slot=$("acct-slot");if(!slot)return;
@@ -439,18 +423,29 @@ function openPwModal(){
   openM("pwModal");setTimeout(()=>$("pw-cur").focus(),80);
 }
 async function submitPw(){
-  const pid=me(),err=$("pw-err");
-  if(!pid){err.textContent="Connecte-toi d'abord.";return;}
+  const u=firebase.auth().currentUser,err=$("pw-err");
+  if(!u||!me()){err.textContent="Connecte-toi d'abord.";return;}
   const cur=$("pw-cur").value.trim(),n1=$("pw-new").value.trim(),n2=$("pw-new2").value.trim();
-  err.textContent="Vérification…";
-  if(!(await checkPw(pwRecord(pid),cur))){err.textContent="Mot de passe actuel incorrect.";return;}
-  if(n1.length<4){err.textContent="4 caractères minimum.";return;}
+  if(n1.length<6){err.textContent="6 caractères minimum.";return;}
   if(n1!==n2){err.textContent="Les deux mots de passe ne correspondent pas.";return;}
-  const rec=await makeRecord(n1);
-  const p=meP();p.pw=rec;
-  session.h=rec.h;saveSession(); // update before the write echoes back
-  await svPlayer(pid,"pw",rec);
+  err.textContent="Vérification…";
+  try{await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,cur));}
+  catch(e){err.textContent=/wrong|invalid/.test(String(e&&e.code))?"Mot de passe actuel incorrect.":authErr(e);return;}
+  try{await u.updatePassword(n1);}catch(e){err.textContent=authErr(e);return;}
   err.textContent="";cm("pwModal");toast("Mot de passe mis à jour","ok","key");
+}
+// Creates a Firebase account for a player without touching the current session (separate app instance).
+let accountsAuth=null;
+async function createAccount(pid,pw){
+  if(!accountsAuth){
+    accountsAuth=firebase.initializeApp(FIREBASE_CONFIG,"accounts").auth();
+    try{await accountsAuth.setPersistence(firebase.auth.Auth.Persistence.NONE);}catch(e){}
+  }
+  const email=`j${pid}-${Date.now().toString(36)}@${ACCOUNT_DOMAIN}`;
+  const c=await accountsAuth.createUserWithEmailAndPassword(email,pw);
+  const uid=c.user.uid;
+  try{await accountsAuth.signOut();}catch(e){}
+  return{uid,email};
 }
 
 // ── AVATARS (optionally pixelated) ───────────────────────────────────────────
@@ -585,7 +580,7 @@ function go(id){
 function render(id){
   ({accueil:rAccueil,classement:rClass,jeux:rJeux,envies:rEnvies,historique:rHisto,stats:rStats,joueurs:rJoueurs})[id]?.();
 }
-function rAll(){render(curTab);}
+function rAll(){render(curTab);bgaRefreshLinks();}
 
 // ── ACCUEIL ──────────────────────────────────────────────────────────────────
 const H=n=>`<span class="hl">${esc(n)}</span>`;
@@ -721,7 +716,9 @@ function rAccueil(){
   const greet=me()?`Salut <b>${esc(meP().name)}</b> ! `:"";
 
   let h=`<section class="hero box">
-    <div class="sky">${stars()}<span class="moon">${ic("moon",48)}</span></div>
+    <div class="sky-layer sky-n"></div><div class="sky-layer sky-s"></div>
+    <div class="sky">${stars()}</div>
+    <span class="orb sun">${ic("sun",96)}</span><span class="orb moon">${ic("moon",64)}</span>
     <div class="hero-in">
       <h1 class="hero-t">GAME NIGHT</h1>
       <p class="hero-s">${greet}<b>${feed.length}</b> parties · <b>${players.length}</b> joueurs · <b>${totG}</b> jeux différents</p>
@@ -991,7 +988,8 @@ function histoFiltered(){
 function rHisto(){
   histoShown=8;
   const list=histoFiltered();
-  let h=`<div class="page-head"><h2 class="ptitle">${ic("scroll",32)}Historique <small>${feed.length} parties</small></h2></div>
+  let h=`<div class="page-head"><h2 class="ptitle">${ic("scroll",32)}Historique <small>${feed.length} parties</small></h2>
+    <button class="btn ghost" onclick="openBga()">${ic("globe",16)}Importer depuis BGA</button></div>
     <div class="row mb">
       <select style="flex:1;min-width:150px;max-width:260px" onchange="histoPlayer=this.value;rHisto()"><option value="all">Tous les joueurs</option>${players.map(p=>`<option value="${p.id}"${histoPlayer===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
       <select style="flex:1;min-width:150px;max-width:260px" onchange="histoGame=this.value;rHisto()"><option value="all">Tous les jeux</option>${ag().filter(g=>feed.some(f=>f.gameId===g.id)).sort((a,b)=>a.name.localeCompare(b.name,"fr")).map(g=>`<option value="${g.id}"${histoGame===g.id?" selected":""}>${esc(g.name)}</option>`).join("")}</select>
@@ -1015,7 +1013,7 @@ function renderHisto(list,from,to){
     if(unranked.length)res+=`<div class="r" style="opacity:.75">${ic("skull",16)}<span class="row" style="gap:.3rem .9rem">${unranked.map(nm).join("")}</span></div>`;
     const tools=loggedIn()?`<button class="ibtn" onclick="openEM('${f.id}')" title="Modifier">${ic("pencil",16)}</button><button class="ibtn" onclick="delMatch('${f.id}')" title="Supprimer">${ic("trash",16)}</button>`:"";
     html+=`<div class="hitem box">${gameArt(g,48)}
-      <div class="hbody"><div class="htop"><div class="grow"><div class="hname">${esc(g?.name||f.gameId)}</div><div class="hdate">${fd(f.date)} · ${(f.playerIds||[]).length} joueurs</div></div>
+      <div class="hbody"><div class="htop"><div class="grow"><div class="hname">${esc(g?.name||f.gameId)}</div><div class="hdate">${fd(f.date)} · ${(f.playerIds||[]).length} joueurs${f.bga&&f.bga.table?` · <a href="https://boardgamearena.com/table?table=${encodeURIComponent(f.bga.table)}" target="_blank" rel="noopener">BGA</a>`:""}</div></div>
         <div class="htools">${pho.length?`<button class="ibtn" onclick="toggleMatchPhotos('${f.id}')" title="Photos">${ic("camera",16)}${pho.length}</button>`:""}${tools}</div></div>
         <div class="hres">${res}</div><div id="mphotos-${f.id}" class="mt" style="display:none"></div></div></div>`;
   });
@@ -1101,10 +1099,10 @@ function submitMatch(){
   if(!loggedIn())return;
   const gid=$("m-game").value,date=$("m-date").value;
   if(!mRanks.p1.length){$("ms2-err").textContent="Indique au moins le gagnant.";return;}
-  feed.unshift({id:Date.now().toString(),gameId:gid,playerIds:[...mSel],rankings:rankingsFrom(mRanks),date,photos:[...pmpho],scores:readScores("m-scores")});
-  if(feed.length>500)feed=feed.slice(0,500);
-  rbs();badgeCache.clear();sv();cm("mModal");rAll();
-  const g=gg(gid);toast(`Partie de ${g?g.name:"jeu"} enregistrée !`,"ok","trophy");
+  const entry={id:Date.now().toString(),gameId:gid,playerIds:[...mSel],rankings:rankingsFrom(mRanks),date,photos:[...pmpho],scores:readScores("m-scores")};
+  feed.push(entry);rbs();badgeCache.clear();cm("mModal");rAll();
+  const g=gg(gid);
+  dbw(()=>dbRef.child("feed").push(clean(entry)),[`Partie de ${g?g.name:"jeu"} enregistrée !`,"trophy"]);
 }
 let emId="",eRanks={p1:[],p2:[],p3:[]},empho=[];
 function openEM(id){
@@ -1126,13 +1124,17 @@ function submitEM(){
   const d=$("e-date").value;if(d)f.date=d;
   const r=rankingsFrom(eRanks);if(r.length)f.rankings=r;
   f.scores=readScores("e-scores");f.photos=[...empho];
-  rbs();badgeCache.clear();sv();cm("emModal");rAll();toast("Partie modifiée","ok","pencil");
+  rbs();badgeCache.clear();cm("emModal");rAll();
+  const k=feedKeys[f.id];if(k===undefined){toast("Partie introuvable, recharge la page","err","cross");return;}
+  dbw(()=>dbRef.child("feed/"+k).set(clean(f)),["Partie modifiée","pencil"]);
 }
 async function delMatch(id){
   if(!loggedIn())return;
   const f=feed.find(x=>x.id===id);const g=f&&gg(f.gameId);
   if(!(await askConfirm(`Supprimer la partie de ${g?g.name:"ce jeu"} du ${fd(f?.date)} ?`)))return;
-  feed=feed.filter(x=>x.id!==id);rbs();badgeCache.clear();sv();rAll();toast("Partie supprimée","ok","trash");
+  const k=feedKeys[id];if(k===undefined)return;
+  feed=feed.filter(x=>x.id!==id);rbs();badgeCache.clear();rAll();
+  dbw(()=>dbRef.child("feed/"+k).remove(),["Partie supprimée","trash"]);
 }
 
 // ── JOUEURS ──────────────────────────────────────────────────────────────────
@@ -1237,28 +1239,57 @@ async function submitPlayer(){
   if(!name){err.textContent="Choisis un pseudo.";return;}
   if(players.some(p=>p.id!==epId&&p.name.toUpperCase()===name)){err.textContent="Ce pseudo est déjà pris.";return;}
   const npw=$("p-pw").value.trim();
+  const btn=$("pSubmitBtn");
   if(epId){
     if(!canEdit(epId))return;
-    const p=players.find(x=>x.id===epId);if(!p)return;
-    if(npw&&isAdmin()){if(npw.length<4){err.textContent="Mot de passe : 4 caractères minimum.";return;}p.pw=await makeRecord(npw);}
-    p.name=name;p.color=selCol;if(ppho)p.photo=ppho;p.cardBgImg=pCardBgImg||null;p.cardBgColor=pCardBgColor||null;p.showBanner=pShowBanner;
-    toast("Profil enregistré","ok","check");
+    const p=players.find(x=>x.id===epId),k=playerKeys[epId];if(!p||k===undefined)return;
+    const resetPw=npw&&isAdmin()&&me()!==epId;
+    if(resetPw&&npw.length<6){err.textContent="Mot de passe : 6 caractères minimum.";return;}
+    const upd={name,color:selCol,cardBgImg:pCardBgImg||null,cardBgColor:pCardBgColor||null,showBanner:pShowBanner};
+    if(ppho)upd.photo=ppho;
+    btn.disabled=true;
+    try{
+      if(resetPw){
+        // Admin reset: a fresh account replaces the old one for this profile.
+        err.textContent="Création du nouveau compte…";
+        let acc;try{acc=await createAccount(p.id,npw);}catch(e){err.textContent=authErr(e);return;}
+        const m={[`gamenight/players/${k}/uid`]:acc.uid,[`gamenight/players/${k}/email`]:acc.email,[`gamenight_uids/${acc.uid}`]:p.id};
+        if(p.uid)m[`gamenight_uids/${p.uid}`]=null;
+        if(!(await dbw(()=>rootRef.update(m),["Nouveau mot de passe actif","key"]))){err.textContent="Le mot de passe n'a pas pu être changé.";return;}
+      }
+      Object.assign(p,upd);
+      err.textContent="";cm("pModal");rAll();
+      dbw(()=>dbRef.child("players/"+k).update(clean(upd)),["Profil enregistré","check"]);
+    }finally{btn.disabled=false;}
   }else{
     if(!loggedIn())return;
-    if(npw.length<4){err.textContent="Donne-lui un mot de passe initial (4 caractères minimum).";return;}
-    players.push({id:Date.now().toString(),name,color:selCol,photo:ppho||null,cardBgImg:pCardBgImg||null,cardBgColor:pCardBgColor||null,showBanner:pShowBanner,pinnedBadges:[],pw:await makeRecord(npw)});
-    toast(`${name} a rejoint la table !`,"ok","meeple");
+    if(npw.length<6){err.textContent="Donne-lui un mot de passe initial (6 caractères minimum).";return;}
+    btn.disabled=true;err.textContent="Création du compte…";
+    try{
+      const pid=Date.now().toString();
+      let acc;try{acc=await createAccount(pid,npw);}catch(e){err.textContent=authErr(e);return;}
+      const obj={id:pid,name,color:selCol,photo:ppho||null,cardBgImg:pCardBgImg||null,cardBgColor:pCardBgColor||null,showBanner:pShowBanner,uid:acc.uid,email:acc.email};
+      const key=dbRef.child("players").push().key;
+      const ok=await dbw(()=>rootRef.update({[`gamenight/players/${key}`]:clean(obj),[`gamenight_uids/${acc.uid}`]:pid}),[`${name} a rejoint la table !`,"meeple"]);
+      if(ok){err.textContent="";cm("pModal");}else err.textContent="Le joueur n'a pas pu être ajouté.";
+    }finally{btn.disabled=false;}
   }
-  sv();cm("pModal");renderAcct();rAll();
 }
 async function delPlayer(id){
   if(!isAdmin())return;
-  const p=players.find(x=>x.id===id);
-  if(!(await askConfirm(`Supprimer ${p?.name} ? Ses parties seront retirées de l'historique.`)))return;
-  players=players.filter(x=>x.id!==id);
-  feed=feed.map(f=>({...f,playerIds:(f.playerIds||[]).filter(pid=>pid!==id),
-    rankings:getRankings(f).map(r=>({...r,pids:r.pids.filter(pid=>pid!==id)})).filter(r=>r.pids.length>0)})).filter(f=>(f.playerIds||[]).length>0);
-  rbs();badgeCache.clear();sv();cm("pModal");rAll();toast("Joueur supprimé","ok","trash");
+  const p=players.find(x=>x.id===id),k=playerKeys[id];if(!p||k===undefined)return;
+  if(!(await askConfirm(`Supprimer ${p.name} ? Ses parties seront retirées de l'historique.`)))return;
+  const m={[`gamenight/players/${k}`]:null};
+  if(p.uid)m[`gamenight_uids/${p.uid}`]=null;
+  feed.forEach(f=>{
+    if(!(f.playerIds||[]).includes(id))return;
+    const fk=feedKeys[f.id];if(fk===undefined)return;
+    const nf={...f,playerIds:f.playerIds.filter(x=>x!==id),rankings:getRankings(f).map(r=>({...r,pids:r.pids.filter(x=>x!==id)})).filter(r=>r.pids.length)};
+    if(nf.scores){nf.scores={...nf.scores};delete nf.scores[id];}
+    m[`gamenight/feed/${fk}`]=nf.playerIds.length?clean(nf):null;
+  });
+  cm("pModal");
+  dbw(()=>rootRef.update(m),["Joueur supprimé","trash"]);
 }
 function renderBadgeGrid(pid){
   const p=players.find(x=>x.id===pid);const pinned=p?.pinnedBadges||[];
@@ -1321,21 +1352,31 @@ function submitGame(){
   if(egId===null){
     const name=$("g-name").value.trim();if(!name){$("g-err").textContent="Donne un nom au jeu.";return;}
     if(ag().some(g=>norm(g.name)===norm(name))){$("g-err").textContent="Ce jeu existe déjà.";return;}
-    customs.push({id:"c"+Date.now(),name,icon:gSelIcon,type:gSelType,img:gNewImg||null});
-    toast(`${name} ajouté au catalogue`,"ok",gSelIcon);
+    const c={id:"c"+Date.now(),name,icon:gSelIcon,type:gSelType,img:gNewImg||null};
+    customs.push(c);cm("gModal");rAll();
+    dbw(()=>dbRef.child("customs").push(clean(c)),[`${name} ajouté au catalogue`,gSelIcon]);
   }else{
-    const c=customs.find(x=>x.id===egId);
-    if(c){const n=$("g-name").value.trim();if(n)c.name=n;c.icon=gSelIcon;c.type=gSelType;if(gNewImg!==undefined)c.img=gNewImg;}
-    else if(gNewImg!==undefined){if(gNewImg===null)delete gameImages[egId];else gameImages[egId]=gNewImg;}
-    toast("Jeu mis à jour","ok","check");
+    const c=customs.find(x=>x.id===egId),id=egId;
+    if(c){
+      const n=$("g-name").value.trim();if(n)c.name=n;c.icon=gSelIcon;c.type=gSelType;if(gNewImg!==undefined)c.img=gNewImg;
+      const k=customKeys[id];cm("gModal");rAll();
+      if(k!==undefined)dbw(()=>dbRef.child("customs/"+k).set(clean(c)),["Jeu mis à jour","check"]);
+    }else{
+      cm("gModal");
+      if(gNewImg===undefined)return;
+      if(gNewImg===null)delete gameImages[id];else gameImages[id]=gNewImg;
+      rAll();
+      dbw(()=>gNewImg===null?dbRef.child("gameImages/"+id).remove():dbRef.child("gameImages/"+id).set(gNewImg),["Jeu mis à jour","check"]);
+    }
   }
-  sv();cm("gModal");rAll();
 }
 async function delGame(id){
   if(!loggedIn()||!customs.some(c=>c.id===id))return;
   const g=gg(id);const n=feed.filter(f=>f.gameId===id).length;
   if(!(await askConfirm(`Supprimer ${g?.name} du catalogue ?${n?` ${n} partie(s) y font référence.`:""}`)))return;
-  customs=customs.filter(c=>c.id!==id);sv();cm("gModal");rAll();toast("Jeu supprimé","ok","trash");
+  const k=customKeys[id];if(k===undefined)return;
+  customs=customs.filter(c=>c.id!==id);cm("gModal");rAll();
+  dbw(()=>dbRef.child("customs/"+k).remove(),["Jeu supprimé","trash"]);
 }
 
 // ── GAME DETAIL ──────────────────────────────────────────────────────────────
@@ -1565,7 +1606,7 @@ function drawStatsChart(){
   const PAD={top:16,right:stShowLabels?92:16,bottom:34,left:40},W=cssW-PAD.left-PAD.right,Hh=cssH-PAD.top-PAD.bottom;
   const cx=i=>PAD.left+(i/(numPts-1||1))*W;
   const cy=v=>isRank?PAD.top+((v-yMin)/(yMax-yMin))*Hh:PAD.top+Hh-(v/yMax)*Hh;
-  ctx.fillStyle="#1a1c2c";ctx.fillRect(0,0,cssW,cssH);
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#1a1c2c";ctx.fillRect(0,0,cssW,cssH);
   ctx.font="500 12px 'Pixelify Sans',sans-serif";
   yTicks.forEach(y=>{ctx.fillStyle="rgba(255,255,255,.06)";ctx.fillRect(PAD.left,Math.round(cy(y)),W,2);ctx.fillStyle="#7387a8";ctx.textAlign="right";ctx.fillText(isRank?(y===1?"1er":y+"e"):String(y),PAD.left-8,cy(y)+4);});
   ctx.textAlign="center";xTicks.forEach(i=>{const raw=entries[i-1];ctx.fillStyle="#7387a8";ctx.fillText(i===0?"":fdShort(raw?.date),cx(i),PAD.top+Hh+20);});
@@ -1596,7 +1637,7 @@ window.addEventListener("resize",()=>{clearTimeout(resizeT);resizeT=setTimeout((
 
 // ── SETTINGS (this device only) ──────────────────────────────────────────────
 const SETT_KEY="gn_settings";
-let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true};
+let localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night"};
 function loadSettings(){try{const s=localStorage.getItem(SETT_KEY);if(s)localSettings={...localSettings,...JSON.parse(s)};}catch(e){}applySettings();}
 function saveSettings(){try{localStorage.setItem(SETT_KEY,JSON.stringify(localSettings));}catch(e){}applySettings();}
 function applySettings(){
@@ -1605,9 +1646,20 @@ function applySettings(){
   if(localSettings.bgImage){bg.style.backgroundImage=`url(${localSettings.bgImage})`;bg.style.opacity=(localSettings.bgOpacity||20)/100;bg.style.display="block";}
   else bg.style.display="none";
   document.body.classList.toggle("calm",!localSettings.animations);
+  const th=localSettings.theme==="sunset"?"sunset":"night";
+  document.documentElement.dataset.theme=th;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",th==="sunset"?"#26172a":"#1a1c2c");
+  const tb=$("theme-btn");
+  if(tb){tb.innerHTML=ic(th==="sunset"?"moon":"sun",16);tb.title=th==="sunset"?"Passer à la nuit":"Passer au coucher de soleil";}
+}
+function toggleTheme(){
+  localSettings.theme=localSettings.theme==="sunset"?"night":"sunset";saveSettings();
+  if($("settModal").classList.contains("open"))syncSettingsUI();
+  if(curTab==="stats")drawStatsChart();
 }
 function syncSettingsUI(){
   document.querySelectorAll("#fs-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.fs===localSettings.fontSize);b.onclick=()=>{localSettings.fontSize=b.dataset.fs;saveSettings();syncSettingsUI();if(curTab==="stats")drawStatsChart();};});
+  document.querySelectorAll("#theme-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.th===(localSettings.theme||"night"));b.onclick=()=>{if(b.dataset.th!==localSettings.theme)toggleTheme();syncSettingsUI();};});
   $("set-pxav").classList.toggle("on",!!localSettings.pixelAvatars);
   $("set-anim").classList.toggle("on",!!localSettings.animations);
   $("bg-opacity").value=localSettings.bgOpacity||20;$("bg-opacity-val").textContent=(localSettings.bgOpacity||20)+"%";
@@ -1621,7 +1673,7 @@ function openSettings(){
 function toggleSetting(k){localSettings[k]=!localSettings[k];saveSettings();syncSettingsUI();if(k==="pixelAvatars"){renderAcct();rAll();}}
 function setBgOpacity(v){localSettings.bgOpacity=parseInt(v);$("bg-opacity-val").textContent=v+"%";saveSettings();}
 function removeBg(){localSettings.bgImage=null;saveSettings();syncSettingsUI();}
-function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true};saveSettings();syncSettingsUI();renderAcct();rAll();}
+function resetSettings(){localSettings={fontSize:"normal",bgImage:null,bgOpacity:20,pixelAvatars:true,animations:true,theme:"night"};saveSettings();syncSettingsUI();renderAcct();rAll();}
 
 // ── CROP TOOL ────────────────────────────────────────────────────────────────
 let _cropCb=null,_cropShape="square",_cropZoom=1,_cropOx=0,_cropOy=0,_cropDrag=false,_cropLx=0,_cropLy=0;
@@ -1657,14 +1709,285 @@ function cropConfirm(){
 }
 function compressAndCrop(file,shape,cb){const r=new FileReader();r.onload=e=>openCropModal(e.target.result,shape,cb);r.readAsDataURL(file);}
 
+// ── BOARD GAME ARENA IMPORT ──────────────────────────────────────────────────
+// BGA has no public API, and its history endpoint only answers pages opened on boardgamearena.com
+// by a logged-in player. So a bookmarklet runs there, opens Game Night at #bga, and relays our
+// read-only requests via postMessage using the player's own BGA session (no BGA password here).
+// The bookmarklet is kept tiny on purpose: all parsing lives below, so fixes never require
+// re-installing the bookmark.
+const BGA_HOST=/^https:\/\/([a-z0-9-]+\.)?boardgamearena\.com$/;
+const BGA_PAGES=3; // history pages read per batch
+// BGA internal names that don't match our game names (the rest match by name or are learned from past imports)
+const BGA_GAMES={sevenwonders:"7wonders",tickettoride:"aventuriers",stella:"stella"};
+let bgaBridge=false,bgaOpened=false,bgaMe="",bgaOrigin="*",bgaSeq=0;
+const bgaWait={};
+let bgaTables=[],bgaPage=0,bgaEnd=false,bgaBusy=false,bgaErr="";
+const bgaSel=new Set(),bgaSeen=new Set(),bgaMap={};
+
+function bgaBookmarklet(){
+  const app=location.origin+location.pathname;
+  const src=`(()=>{const APP=${JSON.stringify(app)},O=new URL(APP).origin;`+
+    `if(!/(^|\\.)boardgamearena\\.com$/.test(location.hostname)){alert("Ouvre boardgamearena.com (connecté à ton compte), puis clique à nouveau sur ce favori.");return;}`+
+    `const cfg=()=>typeof bgaConfig!=="undefined"&&bgaConfig||{};`+
+    `const me=String(typeof current_player_id!=="undefined"&&current_player_id||"");`+
+    `if(!me||me==="0"){alert("Connecte-toi à Board Game Arena, puis clique à nouveau sur ce favori.");return;}`+
+    `window.open(APP+"#bga","_blank");if(window.__gnBga)return;window.__gnBga=1;`+
+    `const OK=["/gamestats/gamestats/getGames.html?","/table/table/tableinfos.html?"];`+
+    `addEventListener("message",async e=>{if(e.origin!==O)return;const m=e.data||{};if(m.gn!=="bga")return;`+
+    `const reply=d=>e.source.postMessage(Object.assign({gn:"bga",id:m.id},d),e.origin);`+
+    `try{if(m.type==="hello")return reply({ok:1,data:{me:me}});`+
+    `const p=String(m.path||"");if(m.type!=="get"||!OK.some(x=>p.indexOf(x)===0))throw new Error("Requête refusée");`+
+    `const r=await fetch(p,{credentials:"include",headers:{"X-Request-Token":cfg().requestToken||""}});`+
+    `const t=await r.text();let j;try{j=JSON.parse(t);}catch(x){throw new Error("BGA n'a pas renvoyé de données (HTTP "+r.status+")");}`+
+    `reply({ok:1,data:j});}catch(err){reply({ok:0,error:String(err&&err.message||err)});}});})();`;
+  return "javascript:"+encodeURIComponent(src);
+}
+function bgaCopy(){
+  const t=bgaBookmarklet();
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject())
+    .then(()=>toast("Code copié : colle-le comme adresse d'un nouveau favori","ok","check"))
+    .catch(()=>window.prompt("Copie ce code et colle-le comme adresse d'un nouveau favori :",t));
+}
+
+// Messaging with the bookmarklet (it lives in the BGA tab that opened us)
+window.addEventListener("message",e=>{
+  if(!BGA_HOST.test(e.origin)||!window.opener||e.source!==window.opener)return;
+  const m=e.data||{},w=m.gn==="bga"&&bgaWait[m.id];if(!w)return;
+  delete bgaWait[m.id];clearTimeout(w.t);bgaOrigin=e.origin;
+  m.ok?w.res(m.data):w.rej(new Error(m.error||"Erreur Board Game Arena."));
+});
+function bgaAsk(msg,ms=20000){
+  return new Promise((res,rej)=>{
+    if(!window.opener){rej(new Error("Onglet Board Game Arena introuvable : lance l'import depuis le favori, sur boardgamearena.com."));return;}
+    const id=++bgaSeq;
+    bgaWait[id]={res,rej,t:setTimeout(()=>{delete bgaWait[id];rej(new Error("Board Game Arena ne répond pas."));},ms)};
+    try{window.opener.postMessage({gn:"bga",id,...msg},bgaOrigin);}
+    catch(e){clearTimeout(bgaWait[id].t);delete bgaWait[id];rej(e);}
+  });
+}
+
+// Parsing. getGames.html returns {status:1,data:{tables:[{table_id,game_name,start,end,normalend,
+// players,player_names,scores,ranks}]}} where the per-player fields are comma-separated lists.
+const bgaSplit=v=>Array.isArray(v)?v.map(x=>String(x??"")):v==null||v===""?[]:String(v).split(",");
+function isoDay(ts){const d=new Date(ts*1000);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function bgaParse(t){
+  const ids=bgaSplit(t.players),names=bgaSplit(t.player_names),scores=bgaSplit(t.scores),ranks=bgaSplit(t.ranks);
+  const ts=Number(t.end)||Number(t.start)||0;
+  return{
+    table:String(t.table_id||"").replace(/\D/g,""),
+    game:String(t.game_name||"").toLowerCase().replace(/[^a-z0-9_-]/g,"")||"inconnu",
+    date:ts?isoDay(ts):"",ts,
+    normal:String(t.normalend??"1")!=="0",
+    ppl:names.map((n,i)=>{const s=parseFloat(scores[i]);return{bid:ids[i]||"",name:n.trim(),score:isFinite(s)?s:null,rank:parseInt(ranks[i],10)||0};}),
+  };
+}
+// Annotate fetched tables with the Game Night players they involve and whether they can be imported
+function bgaRows(){
+  const byName={};players.forEach(p=>{if(p.bga)byName[norm(p.bga)]=p.id;});
+  const done=new Set(feed.map(f=>f.bga&&f.bga.table).filter(Boolean).map(String));
+  return bgaTables.map(t=>{
+    const ppl=t.ppl.map(p=>({...p,pid:byName[norm(p.name)]||null}));
+    const ins=ppl.filter(p=>p.pid);
+    const st=done.has(t.table)?"done":!ppl.some(p=>p.rank>0)?"open":ins.length<2?"few":"ok";
+    return{...t,ppl,ins,out:ppl.length-ins.length,st};
+  });
+}
+// Places among group members only (outsiders are left out), ties kept, top 3 like the manual form
+function bgaRankings(ins){
+  const rs=[...new Set(ins.map(p=>p.rank).filter(r=>r>0))].sort((a,b)=>a-b).slice(0,3);
+  return rs.map((r,i)=>({place:i+1,pids:ins.filter(p=>p.rank===r).map(p=>p.pid)}));
+}
+const gkey=s=>norm(s).replace(/[^a-z0-9]/g,"");
+function bgaPretty(g){return String(g||"").replace(/[_-]+/g," ").replace(/\b[a-z]/g,c=>c.toUpperCase())||"Jeu BGA";}
+function bgaGuess(g){
+  const prev=feed.find(f=>f.bga&&f.bga.game===g&&gg(f.gameId));if(prev)return prev.gameId;
+  const c=customs.find(x=>x.bga===g);if(c)return c.id;
+  if(BGA_GAMES[g]&&gg(BGA_GAMES[g]))return BGA_GAMES[g];
+  const k=gkey(g),m=ag().find(x=>gkey(x.name)===k);return m?m.id:"";
+}
+
+// Loading
+async function bgaConnect(){
+  bgaBusy=true;bgaErr="";bgaRenderList();
+  try{
+    const r=await bgaAsk({type:"hello"},8000);
+    bgaMe=String((r&&r.me)||"").replace(/\D/g,"");
+    if(!bgaMe)throw new Error("Connecte-toi à Board Game Arena, puis relance le favori.");
+    await bgaLoad();
+  }catch(e){bgaErr=e.message||String(e);}
+  bgaBusy=false;bgaRenderList();
+}
+async function bgaLoad(){
+  for(let i=0;i<BGA_PAGES&&!bgaEnd;i++){
+    const r=await bgaAsk({type:"get",path:`/gamestats/gamestats/getGames.html?player=${bgaMe}&opponent_id=0&finished=0&updateStats=0&page=${bgaPage+1}`});
+    if(!r||String(r.status)!=="1")throw new Error((r&&r.error)||"Réponse inattendue de Board Game Arena.");
+    const list=arr(r.data&&r.data.tables);
+    bgaPage++;
+    const have=new Set(bgaTables.map(t=>t.table));
+    list.map(bgaParse).forEach(t=>{if(t.table&&!have.has(t.table)){have.add(t.table);bgaTables.push(t);}});
+    if(!list.length)bgaEnd=true;
+  }
+}
+async function bgaMore(){
+  if(bgaBusy||bgaEnd)return;
+  bgaBusy=true;bgaRenderList();
+  try{await bgaLoad();}catch(e){toast(e.message||"Erreur Board Game Arena","err","cross");}
+  bgaBusy=false;bgaRenderList();
+}
+function bgaRetry(){bgaMe="";bgaTables=[];bgaPage=0;bgaEnd=false;bgaConnect();}
+
+// UI
+function openBga(){
+  if(!loaded){toast("Les données chargent encore, réessaie dans un instant","err","dice");return;}
+  openM("bgaModal");bgaRender();
+  if(bgaBridge&&!bgaMe&&!bgaBusy)bgaConnect();
+}
+function bgaOnData(){
+  if(bgaBridge&&!bgaOpened){bgaOpened=true;openBga();return;}
+  if(bgaBridge&&$("bgaModal")?.classList.contains("open"))bgaRenderList();
+  bgaRefreshLinks();
+}
+function bgaLogin(){openLogin("Connecte-toi pour importer tes parties Board Game Arena.",()=>bgaRender());}
+function bgaLinkRow(p){
+  const v=p.bga||"";
+  return`<div class="bga-link">${avatar(p,24)}<span class="ell">${esc(p.name)}</span>${canEdit(p.id)
+    ?`<input type="text" value="${esc(v)}" placeholder="pseudo BGA" maxlength="40" autocapitalize="none" autocorrect="off" spellcheck="false" onchange="bgaSetName('${p.id}',this.value)" aria-label="Pseudo BGA de ${esc(p.name)}"/>`
+    :`<span class="ell${v?"":" muted"}">${esc(v||"—")}</span>`}</div>`;
+}
+function bgaLinks(){
+  return`${loggedIn()?"":`<div class="hint" style="margin:0 0 .5rem">Connecte-toi pour renseigner ton pseudo. <button class="linkbtn" onclick="bgaLogin()">Connexion</button></div>`}
+    <div class="bga-links">${players.map(bgaLinkRow).join("")}</div>
+    <div class="hint">Le pseudo exact de ton profil BGA. Chacun renseigne le sien, l'admin peut tous les remplir.</div>`;
+}
+function bgaSetName(pid,v){
+  if(!canEdit(pid))return;
+  const p=players.find(x=>x.id===pid);if(!p)return;
+  const name=String(v||"").trim();
+  if(name&&players.some(x=>x.id!==pid&&norm(x.bga)===norm(name))){toast("Ce pseudo BGA est déjà lié à un autre joueur","err","cross");bgaRender();return;}
+  if((p.bga||"")===name)return;
+  p.bga=name||null;svPlayer(pid,"bga",name||null);
+  toast(name?`${p.name} = ${name} sur BGA`:"Pseudo BGA retiré","ok","check");
+  if(bgaBridge)bgaRenderList();
+}
+const bgaCountTxt=()=>`(${players.filter(p=>p.bga).length}/${players.length} renseignés)`;
+// Refresh the username rows (e.g. once sign-in finishes), unless someone is typing in them
+function bgaRefreshLinks(){
+  const w=$("bga-links-wrap");if(!w||!$("bgaModal")?.classList.contains("open")||w.contains(document.activeElement))return;
+  w.innerHTML=bgaLinks();const c=$("bga-count");if(c)c.textContent=bgaCountTxt();
+}
+function bgaRender(){
+  const b=$("bga-body");if(!b)return;
+  const nLinked=players.filter(p=>p.bga).length;
+  const count=`<span id="bga-count" class="muted" style="text-transform:none;letter-spacing:0">${bgaCountTxt()}</span>`;
+  if(bgaBridge){
+    b.innerHTML=`<div id="bga-list"></div>
+      <details class="bga-det"${nLinked<2?" open":""}><summary>${ic("players",16)}Pseudos BGA ${count}</summary><div id="bga-links-wrap">${bgaLinks()}</div></details>`;
+    bgaRenderList();return;
+  }
+  b.innerHTML=`<div class="reason" style="box-shadow:inset var(--px) 0 0 0 var(--sky)">${ic("globe",16)}<span>Board Game Arena n'a pas d'API publique. L'import passe par un favori qui lit ton historique BGA dans ton navigateur : aucun mot de passe BGA n'est demandé ici.</span></div>
+    <div class="bga-step"><span class="n">1</span><div class="grow"><div class="flabel">${ic("players",16)}Pseudos BGA ${count}</div><div id="bga-links-wrap">${bgaLinks()}</div></div></div>
+    <div class="bga-step"><span class="n">2</span><div class="grow"><div class="flabel">${ic("star",16)}Installe le favori (une seule fois)</div>
+      <div class="row"><a class="btn alt bga-bm" href="${esc(bgaBookmarklet())}" onclick="event.preventDefault();toast('Glisse ce bouton dans ta barre de favoris','ok','star')">${ic("dice",16)}Game Night ⇢ BGA</a>
+      <button class="btn ghost sm" onclick="bgaCopy()">Copier le code</button></div>
+      <div class="hint">Sur ordinateur, glisse le bouton jaune dans ta barre de favoris (Ctrl+Maj+B pour l'afficher). Sinon, crée un favori et colle le code copié à la place de l'adresse.</div></div></div>
+    <div class="bga-step"><span class="n">3</span><div class="grow"><div class="flabel">${ic("scroll",16)}Lance l'import</div>
+      <div>Va sur Board Game Arena, connecté à ton compte, et clique sur le favori. Game Night s'ouvre avec tes dernières parties : tu vérifies, tu coches, tu importes.</div>
+      <div class="row mt"><a class="btn ghost sm" href="https://boardgamearena.com/" target="_blank" rel="noopener">${ic("globe",16)}Ouvrir Board Game Arena</a></div></div></div>
+    <div class="mfoot"><button class="btn" onclick="cm('bgaModal')">Fermer</button></div>`;
+}
+function bgaRenderList(){
+  const el=$("bga-list");if(!el)return;
+  if(bgaErr){
+    el.innerHTML=`<div class="reason">${ic("skull",16)}<span>${esc(bgaErr)}</span></div>
+      <div class="hint">Vérifie que l'onglet Board Game Arena est toujours ouvert et que tu y es connecté. Si ça bloque encore, relance le favori depuis BGA.</div>
+      <div class="mfoot"><button class="btn ghost" onclick="cm('bgaModal')">Fermer</button><button class="btn" onclick="bgaRetry()">Réessayer</button></div>`;
+    return;
+  }
+  if(bgaBusy&&!bgaTables.length){el.innerHTML=`<div class="empty">${ic("globe",48)}<span>${bgaMe?"Lecture de ton historique BGA…":"Connexion à Board Game Arena…"}</span></div>`;return;}
+  const rows=bgaRows(),ok=rows.filter(r=>r.st==="ok");
+  ok.forEach(r=>{
+    if(!bgaMap[r.game])bgaMap[r.game]={id:bgaGuess(r.game),name:bgaPretty(r.game)};
+    // Pre-tick clean results only: everyone in the group and a normal game end
+    if(!bgaSeen.has(r.table)){bgaSeen.add(r.table);if(!r.out&&r.normal)bgaSel.add(r.table);}
+  });
+  const games=[...new Set(ok.map(r=>r.game))];
+  const pick=ok.filter(r=>bgaSel.has(r.table)&&bgaMap[r.game].id!=="-");
+  const cnt=k=>rows.filter(r=>r.st===k).length;
+  const skipped=[cnt("done")&&`${cnt("done")} déjà importée${cnt("done")>1?"s":""}`,cnt("few")&&`${cnt("few")} avec moins de 2 joueurs du groupe`,cnt("open")&&`${cnt("open")} sans résultat`].filter(Boolean);
+  let h=`<div class="reason" style="box-shadow:inset var(--px) 0 0 0 var(--green)">${ic("check",16)}<span>Connecté à Board Game Arena · ${rows.length} partie${rows.length>1?"s":""} lue${rows.length>1?"s":""}</span></div>`;
+  if(games.length)h+=`<div class="field"><div class="flabel">${ic("gamepad",16)}Jeux</div><div class="bga-games">${games.map(bgaGameRow).join("")}</div></div>`;
+  h+=`<div class="field"><div class="flabel">${ic("scroll",16)}Parties à importer</div>${ok.length?ok.map(bgaTableRow).join(""):`<div class="empty">${ic("search",32)}<span>Aucune nouvelle partie avec au moins 2 joueurs du groupe.</span></div>`}</div>`;
+  if(skipped.length)h+=`<div class="hint">Ignorées : ${skipped.join(" · ")}.</div>`;
+  h+=`<div class="mfoot">${bgaEnd?`<span class="muted">Début de l'historique atteint</span>`:`<button class="btn ghost" onclick="bgaMore()"${bgaBusy?" disabled":""}>${bgaBusy?"Chargement…":"Parties plus anciennes"}</button>`}<span class="spacer"></span>
+    <button class="btn ok" onclick="bgaImport()"${pick.length&&!bgaBusy?"":" disabled"}>${ic("check",16)}Importer${pick.length?` (${pick.length})`:""}</button></div>`;
+  el.innerHTML=h;
+}
+function bgaGameRow(g){
+  const m=bgaMap[g];
+  const opt=t=>ag().filter(x=>gType(x)===t).sort((a,b)=>a.name.localeCompare(b.name,"fr")).map(x=>`<option value="${esc(x.id)}"${m.id===x.id?" selected":""}>${esc(x.name)}</option>`).join("");
+  return`<div class="bga-game"><span class="ell" title="${esc(g)}"><b>${esc(bgaPretty(g))}</b> <span class="muted">sur BGA</span></span>
+    <div class="bga-gsel"><select onchange="bgaSetGame('${g}',this.value)" aria-label="Jeu Game Night pour ${esc(g)}">
+      <option value=""${m.id===""?" selected":""}>+ Nouveau jeu…</option><option value="-"${m.id==="-"?" selected":""}>Ignorer ce jeu</option>
+      <optgroup label="Jeux de société">${opt("board")}</optgroup><optgroup label="Jeux en ligne">${opt("online")}</optgroup></select>
+      ${m.id===""?`<input type="text" value="${esc(m.name)}" maxlength="48" placeholder="Nom du jeu" oninput="bgaMap['${g}'].name=this.value" aria-label="Nom du nouveau jeu"/>`:""}</div></div>`;
+}
+function bgaSetGame(g,v){if(bgaMap[g]){bgaMap[g].id=v;bgaRenderList();}}
+function bgaToggle(t,on){on?bgaSel.add(t):bgaSel.delete(t);bgaRenderList();}
+function bgaTableRow(r){
+  const m=bgaMap[r.game],skip=m.id==="-",on=!skip&&bgaSel.has(r.table);
+  const g=m.id&&!skip?gg(m.id):null,gname=g?g.name:m.id===""?(m.name.trim()||bgaPretty(r.game)):bgaPretty(r.game);
+  const places={};bgaRankings(r.ins).forEach(x=>x.pids.forEach(pid=>places[pid]=x.place));
+  const sc=s=>s===null?"":`<span class="sc">${esc(s)}</span>`;
+  const ins=[...r.ins].sort((a,b)=>(places[a.pid]||9)-(places[b.pid]||9)).map(p=>{
+    const pl=players.find(x=>x.id===p.pid),k=places[p.pid];
+    return`<span class="bga-p">${k?ic(["medal1","medal2","medal3"][k-1],16):ic("skull",16)}${avatar(pl,20)}<b>${esc(pl.name)}</b>${sc(p.score)}</span>`;
+  }).join("");
+  const outs=r.ppl.filter(p=>!p.pid).map(p=>`<span class="bga-p out">${esc(p.name)}${sc(p.score)}</span>`).join("");
+  const tags=(r.out?`<span class="tag">+${r.out} hors groupe</span>`:"")+(r.normal?"":`<span class="tag">fin anormale</span>`);
+  return`<label class="bga-t${on?"":" off"}"><input type="checkbox"${on?" checked":""}${skip?" disabled":""} onchange="bgaToggle('${r.table}',this.checked)"/>
+    <div class="grow"><div class="row" style="gap:.3rem .6rem"><b>${esc(gname)}</b><span class="hdate">${fd(r.date)}</span>${tags}</div>
+    <div class="bga-ppl">${ins}${outs}</div></div></label>`;
+}
+function bgaImport(){
+  if(!loggedIn()){bgaLogin();return;}
+  const rows=bgaRows().filter(r=>r.st==="ok"&&bgaSel.has(r.table)&&bgaMap[r.game]&&bgaMap[r.game].id!=="-");
+  if(!rows.length)return;
+  let stamp=Date.now();
+  const writes={},newKey=list=>dbRef.child(list).push().key;
+  // Create the games picked as "+ Nouveau jeu" (one per BGA game, reusing a same-named game if any)
+  const made={};
+  rows.forEach(r=>{
+    const m=bgaMap[r.game];
+    if((m.id&&gg(m.id))||made[r.game])return;
+    const name=(m.name||"").trim()||bgaPretty(r.game);
+    const ex=ag().find(x=>norm(x.name)===norm(name));
+    if(ex){made[r.game]=ex.id;return;}
+    const c={id:"c"+(stamp++),name,icon:"meeple",type:"board",img:null,bga:r.game};
+    customs.push(c);writes["customs/"+newKey("customs")]=clean(c);
+    made[r.game]=c.id;
+  });
+  rows.sort((a,b)=>a.ts-b.ts).forEach(r=>{
+    const scores={};r.ins.forEach(p=>{if(p.score!==null)scores[p.pid]=p.score;});
+    const entry={id:String(stamp++),gameId:made[r.game]||bgaMap[r.game].id,playerIds:r.ins.map(p=>p.pid),rankings:bgaRankings(r.ins),
+      date:r.date||new Date().toISOString().split("T")[0],photos:[],scores,bga:{table:r.table,game:r.game}};
+    feed.push(entry);writes["feed/"+newKey("feed")]=clean(entry);
+  });
+  Object.keys(made).forEach(g=>{bgaMap[g].id=made[g];});
+  rbs();badgeCache.clear();rAll();bgaRenderList();
+  const n=rows.length;
+  // One multi-path write: all the games and matches land together, or none do
+  dbw(()=>dbRef.update(writes),[`${n} partie${n>1?"s":""} importée${n>1?"s":""} depuis BGA !`,"trophy"]);
+}
+
 // ── BOOT ─────────────────────────────────────────────────────────────────────
 (function boot(){
   $("favicon").href=PX.uri("dice");
   hydrate();
   $("tabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(t)go(t.dataset.tab);});
-  loadSettings();loadSession();renderAcct();
+  loadSettings();renderAcct();
   const start=(location.hash||"").slice(1);
-  curTab=TABS.includes(start)?start:"accueil";
+  bgaBridge=start==="bga"; // opened by the BGA bookmarklet
+  curTab=TABS.includes(start)?start:bgaBridge?"historique":"accueil";
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="pg-"+curTab));
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===curTab));
   $("pg-"+curTab).innerHTML=`<div class="empty">${ic("dice",48)}<span>Mise en place de la table…</span></div>`;

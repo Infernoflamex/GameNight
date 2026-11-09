@@ -1,0 +1,50 @@
+{
+  "rules": {
+    "gamenight": {
+      ".read": true,
+      "players": {
+        "$k": {
+          ".write": "auth != null && (root.child('gamenight_admins').child(auth.uid).val() === true || (data.exists() && newData.exists() && data.child('uid').val() === auth.uid) || (!data.exists() && root.child('gamenight_uids').child(auth.uid).exists()))",
+          ".validate": "newData.hasChildren(['id', 'name'])",
+          "id": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())" },
+          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+          "uid": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val() || root.child('gamenight_admins').child(auth.uid).val() === true)" },
+          "email": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val() || root.child('gamenight_admins').child(auth.uid).val() === true)" },
+          "wishes": {
+            "$game": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3" }
+          }
+        }
+      },
+      "feed": {
+        "$k": {
+          ".write": "auth != null && (root.child('gamenight_uids').child(auth.uid).exists() || root.child('gamenight_admins').child(auth.uid).val() === true)",
+          ".validate": "newData.hasChildren(['id', 'gameId', 'playerIds'])"
+        }
+      },
+      "customs": {
+        "$k": {
+          ".write": "auth != null && (root.child('gamenight_uids').child(auth.uid).exists() || root.child('gamenight_admins').child(auth.uid).val() === true)",
+          ".validate": "newData.hasChildren(['id', 'name'])"
+        }
+      },
+      "gameImages": {
+        "$game": {
+          ".write": "auth != null && (root.child('gamenight_uids').child(auth.uid).exists() || root.child('gamenight_admins').child(auth.uid).val() === true)",
+          ".validate": "newData.isString()"
+        }
+      }
+    },
+    "gamenight_uids": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (root.child('gamenight_admins').child(auth.uid).val() === true || (!data.exists() && root.child('gamenight_uids').child(auth.uid).exists()))",
+        ".validate": "newData.isString()"
+      }
+    },
+    "gamenight_admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}

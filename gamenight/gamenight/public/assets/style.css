@@ -15,9 +15,14 @@
   --disp:'Press Start 2P',monospace;
   color-scheme:dark;
 }
+:root[data-theme="sunset"]{
+  --bg:#26172a;--bg2:#321d38;--bg3:#432949;--bg4:#5f3a60;
+  --frame:#130a16;
+  --text:#fff4e8;--text2:#efcdbb;--text3:#b3879c;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--text);font:400 1rem/1.45 var(--ui);min-height:100vh;overflow-x:hidden}
+body{background:var(--bg);color:var(--text);font:400 1rem/1.45 var(--ui);min-height:100vh;overflow-x:hidden;transition:background-color .8s}
 body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
   background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:6px 6px}
 img{display:block}
@@ -79,7 +84,7 @@ a{color:var(--cyan)}
 .linkbtn{background:none;border:0;color:var(--cyan);font:500 .95rem var(--ui);cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:0}
 
 /* ── HEADER ───────────────────────────────────────────────────────────────── */
-#hdr{position:sticky;top:0;z-index:50;background:rgba(26,28,44,.94);backdrop-filter:blur(4px);
+#hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(4px);
   box-shadow:0 var(--px) 0 0 var(--frame),0 calc(2*var(--px)) 0 0 rgba(0,0,0,.25)}
 .hdr-in{max-width:1100px;margin:0 auto;padding:.7rem 1rem 0}
 .hdr-top{display:flex;align-items:center;gap:.75rem}
@@ -210,13 +215,27 @@ input[type=range]{accent-color:var(--yellow)}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
 /* ── HERO (night sky + table) ─────────────────────────────────────────────── */
-.hero{overflow:hidden;margin:var(--px) var(--px) 1.8rem;
-  background:linear-gradient(180deg,#151729 0 22%,#1a1e38 22% 40%,#1f2646 40% 56%,#252f57 56% 70%,#2b386a 70%)}
-.sky{position:absolute;inset:0 0 40% 0;pointer-events:none}
+.hero{overflow:hidden;margin:var(--px) var(--px) 1.8rem;background:#151729}
+.sky-layer{position:absolute;inset:0;pointer-events:none;transition:opacity 2s steps(10)}
+.sky-n{background:linear-gradient(180deg,#151729 0 22%,#1a1e38 22% 40%,#1f2646 40% 56%,#252f57 56% 70%,#2b386a 70%)}
+.sky-s{opacity:0;background:linear-gradient(180deg,#2e1840 0 15%,#4a2050 15% 28%,#6e2a5a 28% 40%,#9a3558 40% 51%,#c4494f 51% 61%,#e2694f 61% 71%,#f59258 71% 81%,#ffc06d 81%)}
+:root[data-theme="sunset"] .sky-n{opacity:0}
+:root[data-theme="sunset"] .sky-s{opacity:1}
+.sky{position:absolute;inset:0 0 40% 0;pointer-events:none;transition:opacity 2s steps(10)}
+:root[data-theme="sunset"] .sky{opacity:.2}
+/* Night: the sun has set on the left, the moon is up on the right.
+   Sunset: the sun hangs low on the left, the moon is still below the horizon on the right. */
+.orb{position:absolute;pointer-events:none;transition:top 2.6s steps(32),left 2.6s steps(32),right 2.6s steps(32)}
+.orb img{display:block}
+.sun{left:2%;top:calc(100% + 24px)}
+.sun img{width:96px;height:96px}
+.sun::before{content:"";position:absolute;inset:-40px;background:radial-gradient(circle,rgba(255,205,117,.45),rgba(239,125,87,.14) 45%,transparent 70%)}
+:root[data-theme="sunset"] .sun{left:6%;top:30px;transition-delay:.9s}
+.moon{right:6%;top:18px;transition-delay:.9s}
+:root[data-theme="sunset"] .moon{right:2%;top:calc(100% + 24px);transition-delay:0s}
 .star{position:absolute;width:3px;height:3px;background:#f4f4f4;animation:twinkle 3.2s steps(2) infinite}
 .star.big{width:3px;height:3px;box-shadow:3px 0 0 #f4f4f4,-3px 0 0 #f4f4f4,0 3px 0 #f4f4f4,0 -3px 0 #f4f4f4;background:#ffcd75}
 @keyframes twinkle{50%{opacity:.15}}
-.moon{position:absolute;right:6%;top:18px}
 .hero-in{position:relative;text-align:center;padding:2.2rem 1rem 1.2rem}
 .hero-t{font:400 clamp(1.4rem,4.2vw,2.4rem)/1.2 var(--disp);color:var(--yellow);letter-spacing:.04em;
   text-shadow:3px 3px 0 var(--orange),6px 6px 0 var(--frame)}
@@ -257,7 +276,11 @@ input[type=range]{accent-color:var(--yellow)}
   .bubble{margin-left:0;max-width:none;width:100%;margin-bottom:.4rem}
   .bubble::before{left:26px;bottom:-12px;clip-path:polygon(0 0,100% 0,100% 25%,75% 25%,75% 50%,50% 50%,50% 75%,25% 75%,25% 100%,0 100%)}
   .bubble{margin-bottom:1rem}
-  .moon{top:8px;right:8px;transform:scale(.6667);transform-origin:top right}
+  .moon{top:8px;right:8px}
+  .moon img{width:32px;height:32px}
+  .sun img{width:48px;height:48px}
+  .sun::before{inset:-24px}
+  :root[data-theme="sunset"] .sun{left:8px;top:8px}
   .hero-in{padding-top:2.8rem}
   .mascot{order:2;margin:0 0 -6px 8px}
   .props{right:4%}
@@ -465,6 +488,14 @@ input[type=range]{accent-color:var(--yellow)}
 .who.on{color:var(--bg);background:var(--yellow);box-shadow:inset 0 -3px 0 0 rgba(0,0,0,.2)}
 .reason{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;margin-bottom:1rem;background:var(--bg);color:var(--text2);box-shadow:inset var(--px) 0 0 0 var(--orange)}
 
+@media(max-width:430px){
+  .logo-t{font-size:.62rem;white-space:nowrap}
+  .logo .pxi{width:24px;height:24px}
+  .hdr-top{gap:.4rem}
+  .hdr-actions{gap:0}
+  .hdr-actions .btn{margin:2px}
+  .sync{padding:.3rem .25rem}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 body.calm *{animation:none!important}
 @media(max-width:560px){
@@ -479,4 +510,31 @@ body.calm *{animation:none!important}
   .tile .v{font-size:.95rem}
   .tile{flex-direction:column;align-items:flex-start;gap:.55rem}
   .tiles{gap:1rem}
+}
+
+/* ── BOARD GAME ARENA IMPORT ───────────────────────────────────────────────── */
+.bga-step{display:flex;gap:.8rem;align-items:flex-start;margin-bottom:1.3rem}
+.bga-step .n{flex-shrink:0;font:400 .7rem/1 var(--disp);color:var(--bg);background:var(--yellow);padding:.4rem .5rem .35rem;margin-top:.05rem}
+.bga-links,.bga-games{display:flex;flex-direction:column;gap:6px}
+.bga-link{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,200px);align-items:center;gap:.6rem;padding:.35rem .5rem;background:var(--bg)}
+.bga-link input{width:100%}
+.bga-bm{cursor:grab;text-decoration:none}
+.bga-game{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);align-items:center;gap:.6rem;padding:.4rem .5rem;background:var(--bg)}
+.bga-gsel{display:flex;flex-direction:column;gap:6px;min-width:0}
+.bga-gsel select,.bga-gsel input{width:100%}
+.bga-t{display:flex;gap:.7rem;align-items:flex-start;padding:.6rem .75rem;margin-bottom:6px;background:var(--bg);cursor:pointer;box-shadow:inset var(--px) 0 0 0 var(--yellow)}
+.bga-t.off{box-shadow:inset var(--px) 0 0 0 var(--bg4);opacity:.6}
+.bga-t input[type=checkbox]{width:18px;height:18px;margin:.15rem 0 0;accent-color:var(--yellow);flex-shrink:0;cursor:pointer}
+.bga-ppl{display:flex;flex-wrap:wrap;gap:.3rem .9rem;margin-top:.35rem}
+.bga-p{display:inline-flex;align-items:center;gap:.35rem}
+.bga-p b{font-weight:600}
+.bga-p.out{color:var(--text3)}
+.bga-p .sc{font:400 .62rem var(--disp);color:var(--text3)}
+.bga-det{margin-top:1.2rem}
+.bga-det summary{display:flex;align-items:center;gap:.4rem;cursor:pointer;font:600 .78rem var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text2);padding:.4rem 0}
+.bga-det[open] summary{margin-bottom:.5rem}
+@media(max-width:560px){
+  .bga-link{grid-template-columns:auto minmax(0,1fr)}
+  .bga-link>:nth-child(3){grid-column:1/-1}
+  .bga-game{grid-template-columns:minmax(0,1fr)}
 }
