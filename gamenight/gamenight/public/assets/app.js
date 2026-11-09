@@ -550,6 +550,36 @@ function askConfirm(msg,yes="Supprimer"){
 }
 function hydrate(root=document){root.querySelectorAll("[data-ic]").forEach(el=>{el.outerHTML=PX.icon(el.dataset.ic,+el.dataset.s||16);});}
 function seg(items,cur,fn){return`<div class="seg">${items.map(([k,label,icn])=>`<button class="${cur===k?"on":""}" onclick="${fn}('${k}')">${icn?ic(icn,16):""}${label}</button>`).join("")}</div>`;}
+// Long lists show a short preview; "Voir plus" reveals the next chunk until the end, then "Réduire".
+// How far a list was opened survives re-renders (e.g. after rating a game); filters reset it.
+const lists={};
+function paged(key,items,renderItem,{first=8,step=8,cls=""}={}){
+  const prev=lists[key];
+  const n=Math.min(items.length,Math.max(first,prev&&prev.shown||0));
+  lists[key]={items,renderItem,first,step,shown:n};
+  return`<div id="pl-${key}"${cls?` class="${cls}"`:""}>${items.slice(0,n).map((it,i)=>renderItem(it,i)).join("")}</div><div class="pl-more" id="plm-${key}">${moreBtn(key)}</div>`;
+}
+function moreBtn(key){
+  const s=lists[key];if(!s)return"";
+  const rest=s.items.length-s.shown;
+  if(rest>0)return`<button class="btn ghost" onclick="plMore('${key}')">Voir plus <span class="muted">(${rest} restant${rest>1?"s":""})</span></button>`;
+  if(s.items.length>s.first)return`<button class="btn ghost sm" onclick="plLess('${key}')">Réduire</button>`;
+  return"";
+}
+function plMore(key){
+  const s=lists[key];if(!s)return;
+  const from=s.shown;s.shown=Math.min(s.items.length,s.shown+s.step);
+  $("pl-"+key).insertAdjacentHTML("beforeend",s.items.slice(from,s.shown).map((it,i)=>s.renderItem(it,from+i)).join(""));
+  $("plm-"+key).innerHTML=moreBtn(key);
+}
+function plLess(key){
+  const s=lists[key];if(!s)return;
+  s.shown=s.first;
+  $("pl-"+key).innerHTML=s.items.slice(0,s.shown).map((it,i)=>s.renderItem(it,i)).join("");
+  $("plm-"+key).innerHTML=moreBtn(key);
+  $("pl-"+key).scrollIntoView({block:"start",behavior:"smooth"});
+}
+function plReset(...keys){keys.forEach(k=>{if(lists[k])lists[k].shown=0;});}
 function bar(pct,color){return`<div class="bar"><i style="width:calc((100% - 4px) * ${Math.max(0,Math.min(100,pct))/100});--c:${color}"></i></div>`;}
 
 // Photos
@@ -856,7 +886,7 @@ function tile(icon,v,label,color){return`<div class="tile box">${ic(icon,32)}<di
 
 // ── CLASSEMENT ───────────────────────────────────────────────────────────────
 let classSort="points";
-function setClassSort(k){classSort=k;rClass();}
+function setClassSort(k){classSort=k;plReset("class");rClass();}
 function rClass(){
   const sorts={
     points:(a,b)=>b.points-a.points||b.victoires-a.victoires,
@@ -871,7 +901,7 @@ function rClass(){
     ${seg([["points","Points","star"],["victoires","Victoires","trophy"],["winrate","% victoires"],["parties","Parties"],["jeux","Jeux"],["avgRank","Rang moyen"]],classSort,"setClassSort")}</div>
     <p class="lead">Points par partie : victoire +1 à +3 selon le nombre de joueurs, 2e et 3e place rapportent aussi, dernière place −1.</p>`;
   if(!lb.length){$("pg-classement").innerHTML=h+`<div class="empty box">${ic("players",32)}Aucun joueur.</div>`;return;}
-  lb.forEach((p,i)=>{
+  h+=paged("class",lb,(p,i)=>{
     const r=wr(p.victoires,p.parties),ar=avgRank(p);
     const bg=cardBg(p);
     const stat=(v,l,c,cls="")=>`<div class="${cls}"><div class="v" style="--vc:${c}">${v}</div><div class="l">${l}</div></div>`;
@@ -882,19 +912,19 @@ function rClass(){
     else if(classSort==="avgRank")cols=stat(ar===null?"—":ar.toFixed(2),"rang",avgRankColor(ar));
     else cols=stat(p.points,"points","var(--yellow)")+stat(p.victoires,"victoires","var(--text)","hide-s");
     cols+=stat(r+"%","% vict.","var(--lime)");
-    h+=`<div class="lb-row box${i===0?" y":""}">${bg}
+    return`<div class="lb-row box${i===0?" y":""}">${bg}
       <div class="place">${medal(i,32)}</div>${avatar(p,48)}
       <div class="lb-main"><div class="row" style="gap:.5rem"><span class="lb-name ell">${esc(p.name)}</span>${rankTag(p.points)}</div>
         <div class="lb-bar">${bar(r,p.color||"var(--yellow)")}<span>${p.parties} parties</span></div></div>
       <div class="lb-stats">${cols}</div></div>`;
-  });
+  },{first:8,step:8});
   $("pg-classement").innerHTML=h;
 }
 
 // ── JEUX ─────────────────────────────────────────────────────────────────────
 let jeuxSort="parties",jeuxType="all";
-function setJeuxSort(k){jeuxSort=k;rJeux();}
-function setJeuxType(k){jeuxType=k;rJeux();}
+function setJeuxSort(k){jeuxSort=k;plReset("jeux","jeux0");rJeux();}
+function setJeuxType(k){jeuxType=k;plReset("jeux","jeux0");rJeux();}
 function rJeux(){
   const counts=countByGame();
   const games=ag().filter(g=>jeuxType==="all"||gType(g)===jeuxType).map(g=>{
@@ -912,22 +942,19 @@ function rJeux(){
     <div class="row mb">${seg([["all","Tous"],["board","Société","meeple"],["online",`En ligne (${nOnline})`,"globe"]],jeuxType,"setJeuxType")}
     ${seg([["parties","Plus joués"],["name","A → Z"],["winrate","Domination"]],jeuxSort,"setJeuxSort")}</div>`;
   if(played.length){
-    h+=`<div class="ggrid">`;
-    played.forEach(g=>{
+    h+=paged("jeux",played,g=>{
       const lead=g.ldr&&g.ldr.v>0?`<div class="gcard-l" title="Meilleur joueur">${ic("crown",16)}<span class="ell">${esc(g.ldr.name)}</span><span class="muted">${g.ldr.v}</span></div>`:"";
-      h+=`<div class="gcard box" onclick="openDetail('${g.id}')">
+      return`<div class="gcard box" onclick="openDetail('${g.id}')">
         <div class="art" style="--a1:${tint(g.id)[0]};--a2:${tint(g.id)[1]}">${g.img?coverDiv(g):ic(gIcon(g),64)}
           ${gType(g)==="online"?`<span class="badge tag on">${ic("globe",16)}En ligne</span>`:""}
           ${loggedIn()?`<div class="tools"><button class="ibtn" onclick="event.stopPropagation();openEG('${g.id}')" title="Modifier">${ic("pencil",16)}</button></div>`:""}</div>
         <div class="gcard-b"><div class="gcard-n">${esc(g.name)}</div>
           <div class="gcard-m"><span class="cnt">${g.tot}</span>partie${g.tot>1?"s":""}</div>${lead}</div></div>`;
-    });
-    h+=`</div>`;
+    },{first:12,step:12,cls:"ggrid"});
   }else h+=`<div class="empty box">${ic("dice",32)}Aucune partie pour ce filtre.</div>`;
   if(zeros.length){
-    h+=`<h3 class="ptitle mt" style="font-size:.75rem;margin-bottom:.8rem">Pas encore joués <small>${zeros.length}</small></h3><div class="unplayed">`;
-    zeros.forEach(g=>{h+=`<button class="chip" style="cursor:pointer" onclick="openDetail('${g.id}')">${ic(gIcon(g),16)}${esc(g.name)}${gType(g)==="online"?ic("globe",16):""}</button>`;});
-    h+=`</div>`;
+    h+=`<h3 class="ptitle mt" style="font-size:.75rem;margin-bottom:.8rem">Pas encore joués <small>${zeros.length}</small></h3>`;
+    h+=paged("jeux0",zeros,g=>`<button class="chip" style="cursor:pointer" onclick="openDetail('${g.id}')">${ic(gIcon(g),16)}${esc(g.name)}${gType(g)==="online"?ic("globe",16):""}</button>`,{first:12,step:24,cls:"unplayed"});
   }
   $("pg-jeux").innerHTML=h;
 }
@@ -966,11 +993,11 @@ function setWish(gid,lvl){
   if(curTab==="envies")rEnvies();
 }
 function setWishView(v){wishView=v;rEnvies();}
-function setWishType(v){wishType=v;rEnvies();}
-function setWishFilter(v){wishFilter=v;rEnvies();}
+function setWishType(v){wishType=v;plReset("wgroup","wmine");rEnvies();}
+function setWishFilter(v){wishFilter=v;plReset("wmine");rEnvies();}
 function toggleWishPresent(pid){
   if(!wishPresent)wishPresent=players.map(p=>p.id);
-  wishPresent=wishPresent.includes(pid)?wishPresent.filter(x=>x!==pid):[...wishPresent,pid];
+  wishPresent=wishPresent.includes(pid)?wishPresent.filter(x=>x!==pid):[...wishPresent,pid];plReset("wgroup");
   rEnvies();
 }
 function wishAll(on){wishPresent=on?players.map(p=>p.id):[];rEnvies();}
@@ -998,13 +1025,13 @@ function renderGroupWishes(){
   if(!rows.length)return h+`<div class="empty box">${ic("face_ok",32)}<span>Aucune envie notée pour cette sélection.</span><button class="btn sm" onclick="setWishView('mine')">${ic("heart",16)}Donner mes envies</button></div>`;
   h+=`<p class="muted mb" style="margin-top:-.4rem">${voters.length} personne${voters.length>1?"s":""} sur ${present.length} ont donné leurs envies.</p>`;
   const max=3*present.length;
-  rows.forEach((r,i)=>{
+  h+=paged("wgroup",rows,(r,i)=>{
     const unan=present.length>1&&r.v[3].length===present.length;
     const grp=WISH_LEVELS.filter(l=>r.v[l].length).map(l=>`<span class="grp" style="--wc:${WISH[l].c}" title="${esc(WISH[l].label)}">${ic(WISH[l].icon,16)}<span class="avs">${r.v[l].map(pid=>avatar(players.find(p=>p.id===pid),22)).join("")}</span></span>`).join("");
-    h+=`<div class="wrow box${unan?" g":""}"><span class="place">${medal(i,16)}</span>${gameArt(r.g,32,false)}
+    return`<div class="wrow box${unan?" g":""}"><span class="place">${medal(i,16)}</span>${gameArt(r.g,32,false)}
       <div class="grow"><div class="nm">${esc(r.g.name)}${unan?`<span class="unanime">Unanime</span>`:""}</div><div class="wvoters">${grp}</div></div>
       <div class="wscore"><span class="num">${r.score}<span class="muted" style="font-size:.6rem"> / ${max}</span></span>${bar(r.score/max*100,unan?"var(--lime)":"var(--yellow)")}</div></div>`;
-  });
+  },{first:8,step:10});
   return h;
 }
 function renderMyWishes(){
@@ -1023,13 +1050,13 @@ function renderMyWishes(){
   let h=`<div class="progress">${avatar(p,32)}<span>Tu as noté <b style="color:var(--yellow)">${rated}</b> jeux sur ${total}.</span><div class="grow" style="max-width:260px">${bar(total?rated/total*100:0,"var(--lime)")}</div></div>
     <div class="row mb">${seg([["all","Tous"],["board","Société","meeple"],["online","En ligne","globe"]],wishType,"setWishType")}
     ${seg([["all","Tout"],["todo","À noter"],["done","Notés"]],wishFilter,"setWishFilter")}
-    <input type="search" id="wish-q" placeholder="Rechercher un jeu…" value="${esc(wishSearch)}" style="max-width:240px" oninput="wishSearch=this.value;rEnviesKeepFocus()"/></div>`;
+    <input type="search" id="wish-q" placeholder="Rechercher un jeu…" value="${esc(wishSearch)}" style="max-width:240px" oninput="wishSearch=this.value;plReset('wmine');rEnviesKeepFocus()"/></div>`;
   if(!games.length)return h+`<div class="empty box">${ic("search",32)}Aucun jeu ici.</div>`;
-  games.forEach(g=>{
+  h+=paged("wmine",games,g=>{
     const cur=hasWish(mine[g.id])?+mine[g.id]:null;
-    h+=`<div class="wrow box">${gameArt(g,32,false)}<div class="grow"><div class="nm">${esc(g.name)}</div><div class="sub muted">${gType(g)==="online"?"Jeu en ligne":"Jeu de société"}</div></div>
+    return`<div class="wrow box">${gameArt(g,32,false)}<div class="grow"><div class="nm">${esc(g.name)}</div><div class="sub muted">${gType(g)==="online"?"Jeu en ligne":"Jeu de société"}</div></div>
       <div class="wvote">${WISH_LEVELS.map(l=>`<button class="wbtn${cur===l?" on":""}" style="--wc:${WISH[l].c}" onclick="setWish('${g.id}',${l})" title="${esc(WISH[l].short+" · "+WISH[l].label)}">${ic(WISH[l].icon,16)}<span>${WISH[l].short}</span><span class="txt">${esc(WISH[l].label)}</span></button>`).join("")}</div></div>`;
-  });
+  },{first:10,step:10});
   return h;
 }
 function rEnviesKeepFocus(){
@@ -1210,8 +1237,7 @@ function rJoueurs(){
     <button class="btn" onclick="openPM()">${ic("plus",16)}Nouveau joueur</button></div>`;
   if(!loggedIn())h+=`<div class="reason" style="box-shadow:inset var(--px) 0 0 0 var(--sky)">${ic("lock",16)}<span>Chaque profil est protégé par un mot de passe. <button class="linkbtn" onclick="openLogin()">Connecte-toi</button> pour modifier le tien.</span></div>`;
   if(!players.length){$("pg-joueurs").innerHTML=h+`<div class="empty box">${ic("players",32)}Aucun joueur encore.</div>`;return;}
-  h+=`<div class="pgrid">`;
-  players.forEach(p=>{
+  h+=paged("joueurs",players,p=>{
     const t=gt(p.id),ar=avgRank(t);
     const bestG=ag().map(g=>({...g,v:stats[p.id]?.[g.id]?.victoires||0})).filter(g=>g.v>0).sort((a,b)=>b.v-a.v)[0];
     const bg=cardBg(p);
@@ -1219,7 +1245,7 @@ function rJoueurs(){
     const nWish=Object.keys(p.wishes||{}).length;
     const tool=canEdit(p.id)?`<button class="btn ghost sm sq" onclick="openEP('${p.id}')" title="Modifier">${ic("pencil",16)}</button>`
       :!loggedIn()?`<button class="ibtn" onclick="openLogin('Connecte-toi pour modifier ton profil.',()=>openEP('${p.id}'),'${p.id}')" title="C'est moi">${ic("lock",16)}</button>`:"";
-    h+=`<div class="pcard box${me()===p.id?" g":""}">${bg}
+    return`<div class="pcard box${me()===p.id?" g":""}">${bg}
       <div class="pcard-top">${avatar(p,64)}
         <div class="grow"><div class="pcard-n">${esc(p.name)}${me()===p.id?`<span class="pcard-me">TOI</span>`:""}</div>
           <div class="row" style="margin-top:.4rem;gap:.4rem">${rankTag(t.points)}${nWish?`<span class="tag" title="Jeux notés dans Envies">${ic("heart",16)}${nWish}</span>`:""}</div>
@@ -1233,8 +1259,7 @@ function rJoueurs(){
         <div><div class="v" style="--vc:var(--cyan)">${t.points}</div><div class="l">Points</div></div>
         <div><div class="v" style="--vc:${avgRankColor(ar)}">${ar===null?"—":ar.toFixed(1)}</div><div class="l">Rang moy.</div></div>
       </div></div>`;
-  });
-  h+=`</div>`;
+  },{first:6,step:6,cls:"pgrid"});
   $("pg-joueurs").innerHTML=h;
 }
 function showBadgeTip(el,bid){
@@ -1449,6 +1474,7 @@ async function delGame(id){
 }
 
 // ── GAME DETAIL ──────────────────────────────────────────────────────────────
+let detailGid=null;
 function openDetail(gid){
   const g=gg(gid);if(!g)return;
   const total=feed.filter(f=>f.gameId===gid).length;
@@ -1471,11 +1497,12 @@ function openDetail(gid){
   // Palmares
   h+=`<div class="box-h" style="margin:0 -1.15rem .2rem">${ic("trophy",16)}<h3>Palmarès</h3></div>`;
   if(!rows.length)h+=`<div class="empty">${ic("dice",32)}Personne n'y a encore joué.</div>`;
-  rows.forEach((r,i)=>{
+  if(detailGid!==gid){plReset("detail");detailGid=gid;}
+  h+=paged("detail",rows,(r,i)=>{
     const ar=avgRank(r);
-    h+=`<div class="lrow"><span class="place">${medal(i,16)}</span>${avatar(r,30)}<div class="grow"><div class="nm ell">${esc(r.name)}</div><div class="sub">${r.parties} parties · ${wr(r.victoires,r.parties)} % de victoires</div></div>
+    return`<div class="lrow"><span class="place">${medal(i,16)}</span>${avatar(r,30)}<div class="grow"><div class="nm ell">${esc(r.name)}</div><div class="sub">${r.parties} parties · ${wr(r.victoires,r.parties)} % de victoires</div></div>
       <div class="end row" style="gap:.8rem;flex-wrap:nowrap;font-size:.9rem"><span title="Victoires">${ic("medal1",16)}${r.victoires}</span><span title="2e places">${ic("medal2",16)}${r.seconds}</span><span title="Points" style="color:var(--yellow)">${ic("star",16)}${Math.max(0,r.points)}</span><span title="Rang moyen" style="color:${avgRankColor(ar)}">${ar===null?"—":ar.toFixed(2)}</span></div></div>`;
-  });
+  },{first:6,step:6});
   // Score records
   const sc=rows.filter(r=>r.scoreCount>0);
   if(sc.length){

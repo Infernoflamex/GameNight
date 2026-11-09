@@ -312,6 +312,8 @@ input[type=range]{accent-color:var(--yellow)}
 .lrow .end{margin-left:auto;text-align:right;flex-shrink:0}
 .place{width:30px;display:flex;justify-content:center;flex-shrink:0}
 .rk-num{font:var(--dw) calc(.7rem*var(--dz)) var(--disp);color:var(--text3)}
+.pl-more{text-align:center;margin-top:1.1rem}
+.pl-more:empty{display:none}
 .empty{text-align:center;padding:2.2rem 1rem;color:var(--text3);display:flex;flex-direction:column;align-items:center;gap:.8rem}
 .empty .pxi{opacity:.75}
 
