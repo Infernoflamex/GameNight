@@ -457,6 +457,7 @@ input[type=range]{accent-color:var(--yellow)}
 .wvoters{display:flex;flex-wrap:wrap;gap:.35rem .8rem;margin-top:.35rem}
 .wvoters .grp{display:inline-flex;align-items:center;gap:.3rem}
 .wvoters .grp .lv{font:var(--dw) calc(.55rem*var(--dz)) var(--disp);color:var(--wc)}
+.tag.newg{background:var(--orange);color:var(--bg);box-shadow:none;margin-left:.45rem;vertical-align:middle}
 .unanime{font:600 .7rem var(--ui);letter-spacing:.06em;text-transform:uppercase;background:var(--lime);color:var(--bg);padding:.18rem .4rem;margin-left:.4rem;vertical-align:middle}
 @media(max-width:640px){
   .wrow{flex-wrap:wrap}

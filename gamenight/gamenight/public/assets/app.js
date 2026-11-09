@@ -324,6 +324,8 @@ function initFirebase(){
 }
 function onData(){
   rbs();badgeCache.clear();
+  if(curTab==="envies")markEnviesSeen();
+  updateEnviesBadge();
   renderAcct();
   rAll();
   bgaOnData();
@@ -654,6 +656,8 @@ const TABS=["accueil","classement","jeux","envies","historique","stats","joueurs
 let curTab="accueil";
 function go(id){
   if(!TABS.includes(id))id="accueil";
+  if(curTab==="envies"&&id!=="envies"&&envNew.size){envNew.clear();pageVer.envies=-1;} // tags last one visit
+  if(id==="envies"&&markEnviesSeen())pageVer.envies=-1;
   curTab=id;
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="pg-"+id));
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.tab===id));
@@ -959,6 +963,25 @@ function rJeux(){
   $("pg-jeux").innerHTML=h;
 }
 
+// ── "NEW" on the Envies tab: games added since this device last opened Envies ──
+const SEEN_KEY="gn_seen_games";
+let seenGames=null;const envNew=new Set(); // envNew = games to tag "NEW" during the current visit
+function loadSeen(){try{const v=JSON.parse(localStorage.getItem(SEEN_KEY)||"null");seenGames=Array.isArray(v)?new Set(v):null;}catch(e){seenGames=null;}}
+function saveSeen(){try{localStorage.setItem(SEEN_KEY,JSON.stringify([...seenGames]));}catch(e){}}
+function unseenGames(){return seenGames?ag().filter(g=>!seenGames.has(g.id)):[];}
+function updateEnviesBadge(){
+  if(!loaded)return;
+  if(!seenGames){seenGames=new Set(ag().map(g=>g.id));saveSeen();} // first visit: nothing counts as new
+  const n=unseenGames().length,b=$("envies-new");
+  if(b){b.hidden=!n;b.textContent=n>1?"NEW "+n:"NEW";b.title=n?`${n} nouveau${n>1?"x":""} jeu${n>1?"x":""} à noter`:"";}
+}
+function markEnviesSeen(){
+  const u=unseenGames();if(!u.length)return false;
+  u.forEach(g=>{envNew.add(g.id);seenGames.add(g.id);});
+  saveSeen();updateEnviesBadge();return true;
+}
+const newTag=g=>envNew.has(g.id)?`<span class="tag newg">NEW</span>`:"";
+
 // ── ENVIES (wishes) ──────────────────────────────────────────────────────────
 const WISH_LEVELS=[3,2,1,0]; // 0 = "connais pas": shown, but never counted in the score
 const hasWish=v=>v!==undefined&&v!==null&&+v>=0&&+v<=3;
@@ -1029,7 +1052,7 @@ function renderGroupWishes(){
     const unan=present.length>1&&r.v[3].length===present.length;
     const grp=WISH_LEVELS.filter(l=>r.v[l].length).map(l=>`<span class="grp" style="--wc:${WISH[l].c}" title="${esc(WISH[l].label)}">${ic(WISH[l].icon,16)}<span class="avs">${r.v[l].map(pid=>avatar(players.find(p=>p.id===pid),22)).join("")}</span></span>`).join("");
     return`<div class="wrow box${unan?" g":""}"><span class="place">${medal(i,16)}</span>${gameArt(r.g,32,false)}
-      <div class="grow"><div class="nm">${esc(r.g.name)}${unan?`<span class="unanime">Unanime</span>`:""}</div><div class="wvoters">${grp}</div></div>
+      <div class="grow"><div class="nm">${esc(r.g.name)}${newTag(r.g)}${unan?`<span class="unanime">Unanime</span>`:""}</div><div class="wvoters">${grp}</div></div>
       <div class="wscore"><span class="num">${r.score}<span class="muted" style="font-size:.6rem"> / ${max}</span></span>${bar(r.score/max*100,unan?"var(--lime)":"var(--yellow)")}</div></div>`;
   },{first:8,step:10});
   return h;
@@ -1046,7 +1069,7 @@ function renderMyWishes(){
   if(wishFilter==="todo")games=games.filter(g=>!hasWish(mine[g.id]));
   if(wishFilter==="done")games=games.filter(g=>hasWish(mine[g.id]));
   const q=norm(wishSearch);if(q)games=games.filter(g=>norm(g.name).includes(q));
-  games.sort((a,b)=>a.name.localeCompare(b.name,"fr"));
+  games.sort((a,b)=>(envNew.has(b.id)-envNew.has(a.id))||a.name.localeCompare(b.name,"fr"));
   let h=`<div class="progress">${avatar(p,32)}<span>Tu as noté <b style="color:var(--yellow)">${rated}</b> jeux sur ${total}.</span><div class="grow" style="max-width:260px">${bar(total?rated/total*100:0,"var(--lime)")}</div></div>
     <div class="row mb">${seg([["all","Tous"],["board","Société","meeple"],["online","En ligne","globe"]],wishType,"setWishType")}
     ${seg([["all","Tout"],["todo","À noter"],["done","Notés"]],wishFilter,"setWishFilter")}
@@ -1054,7 +1077,7 @@ function renderMyWishes(){
   if(!games.length)return h+`<div class="empty box">${ic("search",32)}Aucun jeu ici.</div>`;
   h+=paged("wmine",games,g=>{
     const cur=hasWish(mine[g.id])?+mine[g.id]:null;
-    return`<div class="wrow box">${gameArt(g,32,false)}<div class="grow"><div class="nm">${esc(g.name)}</div><div class="sub muted">${gType(g)==="online"?"Jeu en ligne":"Jeu de société"}</div></div>
+    return`<div class="wrow box">${gameArt(g,32,false)}<div class="grow"><div class="nm">${esc(g.name)}${newTag(g)}</div><div class="sub muted">${gType(g)==="online"?"Jeu en ligne":"Jeu de société"}</div></div>
       <div class="wvote">${WISH_LEVELS.map(l=>`<button class="wbtn${cur===l?" on":""}" style="--wc:${WISH[l].c}" onclick="setWish('${g.id}',${l})" title="${esc(WISH[l].short+" · "+WISH[l].label)}">${ic(WISH[l].icon,16)}<span>${WISH[l].short}</span><span class="txt">${esc(WISH[l].label)}</span></button>`).join("")}</div></div>`;
   },{first:10,step:10});
   return h;
@@ -2163,7 +2186,7 @@ function bgaImport(){
   $("favicon").href=PX.uri("dice");
   hydrate();
   $("tabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(t)go(t.dataset.tab);});
-  loadSettings();renderAcct();
+  loadSettings();loadSeen();renderAcct();
   const start=(location.hash||"").slice(1);
   bgaBridge=start==="bga"; // opened by the BGA bookmarklet
   curTab=TABS.includes(start)?start:bgaBridge?"historique":"accueil";
